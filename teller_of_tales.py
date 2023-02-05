@@ -8,13 +8,19 @@ from datetime import datetime
 
 import os
 import json
+import openai
 
+# Use API_KEY imported from environment variables
+openai.api_key = os.environ['OPENAI_TOKEN']
 
 # show step by step debug info?
 DEBUG = True
 
 # minimal amount of words to put in each story fragment
 FRAGMENT_LENGTH = 10
+
+# select model to use
+model_engine = "text-davinci-003"
 
 
 
@@ -136,6 +142,20 @@ def sentences_to_fragments(story_sentences_list, FRAGMENT_LENGTH):
     
     return story_fragments
   
+  
+
+def askChatGPT(text, model_engine):
+
+    completions = openai.Completion.create(
+        engine=model_engine,
+        prompt=text,
+        max_tokens=100,
+        n=1,
+        stop=None,
+        temperature=0.9,
+    )
+    return completions.choices[0].text  
+  
 
 if __name__ == "__main__":
 
@@ -151,4 +171,21 @@ if __name__ == "__main__":
     story_sentences_list = load_and_split_to_sentences("story.txt")
     
     # group sentences into story fragments of a given length
-    story_fragments = sentences_to_fragments(story_sentences_list, FRAGMENT_LENGTH)
+    story_fragments = sentences_to_fragments(story_sentences_list, FRAGMENT_LENGTH) 
+    
+    image_prompts = []
+    
+    # for each story fragment
+    for i, story_fragment in enumerate(story_fragments):
+        print(f"{showTime()}")
+        prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
+        # translate fragment into prompt 
+        try:
+            image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
+            print(i, image_prompt)
+            image_prompts.append(image_prompt)
+            write_list(image_prompts, "text/image_prompts.json")
+            image_prompts = read_list("text/image_prompts.json")
+        except:
+            print(f"{showTime()} Cannot connect with OpenAI servers. \nProbable cause: No Internet connection, Invalid API token, Too much calls in short time")
+            exit()
