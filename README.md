@@ -33,11 +33,15 @@ Add both check boxes:
 * Associate supported file extensions
 * Install legacy utilities
 ```
-
 6. Add your OpenAI Token from https://beta.openai.com/account/api-keys to environment variables:
 ``` sh
 setx OPENAI_TOKEN=your_token
 ```
+7. Login to HugginFace using your Access Token from https://huggingface.co/settings/tokens:
+``` sh
+huggingface-cli login
+```
+
 
 
 ## Usage:
