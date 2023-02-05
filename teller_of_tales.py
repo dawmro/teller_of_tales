@@ -13,6 +13,9 @@ import json
 # show step by step debug info?
 DEBUG = True
 
+# minimal amount of words to put in each story fragment
+FRAGMENT_LENGTH = 10
+
 
 
 def write_list(a_list, filename):
@@ -77,7 +80,62 @@ def load_and_split_to_sentences(filename):
     
     return story_sentences_list
     
+  
+def sentences_to_fragments(story_sentences_list, FRAGMENT_LENGTH):
+
+    # story divided into fragments
+    story_fragments = []
+
+    # fragment currently being worked on
+    current_fragment = None
+
+    # current fragment word counter
+    current_fragment_word_counter = 0
+
+    # for every sentence in list of sentences
+    # combine sentences form story into fragments
+    for story_sentence in story_sentences_list:
+
+        # insert story sentence if current fragment is empty
+        if current_fragment == None:
+            current_fragment = story_sentence   
+            
+        # add story sentence to current fragment    
+        else:
+            current_fragment += ' ' + story_sentence
+            
+        # get amount of words in fragment    
+        current_fragment_word_counter = len(word_tokenize(current_fragment))
+        
+        # if minimal length requirement is meet
+        if current_fragment_word_counter > FRAGMENT_LENGTH:
+            if DEBUG:
+                print(current_fragment_word_counter)
+        
+            # add current fragment to story fragments
+            story_fragments.append(current_fragment)
+            
+            # zero temporary variables
+            current_fragment = None
+            current_fragment_word_counter = 0
+     
+    # add last fragment 
+    if current_fragment is not None:
+        story_fragments.append(current_fragment)
     
+    write_list(story_fragments, "text/story_fragments.json")
+    
+    if DEBUG:
+        # display story enumerating through each sentence
+        for i, story_fragment in enumerate(story_fragments):
+            print( i, story_fragment)
+        print("\n!!!!!!!!!!!!!!\nThis is last chance to make changes in story_fragments.json file\n!!!!!!!!!!!!!!")
+        pause()
+        
+    story_fragments = read_list("text/story_fragments.json")
+    
+    return story_fragments
+  
 
 if __name__ == "__main__":
 
@@ -91,3 +149,6 @@ if __name__ == "__main__":
     
     # load story and split it by sentence
     story_sentences_list = load_and_split_to_sentences("story.txt")
+    
+    # group sentences into story fragments of a given length
+    story_fragments = sentences_to_fragments(story_sentences_list, FRAGMENT_LENGTH)
