@@ -73,8 +73,8 @@ def load_and_split_to_sentences(filename):
     with open(filename, "r", encoding="utf-8") as file:
         story_raw = file.read()
 
-    # remove quotes from story
-    story = story_raw.replace('“', '').replace('”', '').replace('——', '')
+    # remove quotes and other characters from story
+    story = story_raw.replace('“', '').replace('”', '').replace('‘', '').replace('’', '').replace('——', '').replace('\n', ' ')
 
     # split story into list of sentences
     story_sentences_list = sent_tokenize(story)
@@ -178,7 +178,32 @@ def prompt_to_image(i, image_prompt, image_width, image_height):
 
     image.save(f"images/image{i}.jpg")
     
-   
+    
+def createVideoClip(i, story_fragment):
+
+    # create gTTS instance and save to a file
+    tts = gTTS(text=story_fragment, lang='en', slow=False)
+    tts.save(f"audio/voiceover{i}.mp3")
+    
+    # load the audio file using moviepy
+    audio_clip = AudioFileClip(f"audio/voiceover{i}.mp3")
+    audio_duration = audio_clip.duration
+    
+    # load the image file using moviepy
+    image_clip = ImageClip(f"images/image{i}.jpg").set_duration(audio_duration)
+    
+    # use moviepy to create a text clip from the text
+    screensize = (image_width, image_height)
+    text_clip = TextClip(story_fragment, fontsize=35, font="Impact", color="black", stroke_color="white", stroke_width=1.5, size=screensize, method='caption', align="South")
+    text_clip = text_clip.set_duration(audio_duration)
+    
+    # concatenate the audio, image, and text clips
+    clip = image_clip.set_audio(audio_clip)
+    video = CompositeVideoClip([clip, text_clip])
+    
+    # save Video Clip to a file
+    video = video.write_videofile(f"videos/video{i}.mp4", fps=24)
+    print(f"{showTime()} The Video{i} Has Been Created Successfully!")
         
     
 def askChatGPT(text, model_engine):
@@ -193,6 +218,17 @@ def askChatGPT(text, model_engine):
     )
     return completions.choices[0].text
     
+
+def createListOfClips():
+
+    clips = []
+    l_files = os.listdir("videos")
+    l_files.sort(key=lambda f: int(re.sub('\D', '', f)))
+    for file in l_files:
+        clip = VideoFileClip(f"videos/{file}")
+        clips.append(clip)
+    
+    return clips
 
 
 if __name__ == "__main__":
@@ -235,5 +271,24 @@ if __name__ == "__main__":
         # generate image form prompt 
         prompt_to_image(i, image_prompt, image_width, image_height)
         
+        # create video clip using story fragment and generated image
+        createVideoClip(i, story_fragment)
+        
+        # if DEBUG:
+            # pause()
+    
+    # create sorted list of clips
+    print(f"{showTime()} Fixing order of video clips")
+    clips = createListOfClips()
+    
+    # add audio fade to prevent audio glitches when combining multiple clips
+    clips = [clip.audio_fadein(0.04).audio_fadeout(0.04) for clip in clips]
+    
+    # combine all clips into final video
+    print(f"{showTime()} Concatenate all clips into final video...")
+    final_video = concatenate_videoclips(clips, method="compose")
+    final_video = final_video.write_videofile("final_video.mp4")
+    print(f"{showTime()} Final video created successfully!")
 
+        
    
