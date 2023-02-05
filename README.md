@@ -41,8 +41,9 @@ setx OPENAI_TOKEN=your_token
 
 
 ## Usage:
-1. Paste your story into story.txt file
-2. Run python script:
+1. Delete audio, images, texts, videos directiories.
+2. Paste your story into story.txt file
+3. Run python script:
 ``` sh
 python .\teller_of_tales.py
 ```
