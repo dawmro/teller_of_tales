@@ -1,7 +1,12 @@
-# teller_of_tales [WIP]
-Create narrated video story from book chapter using NLP, OpenAI and StableDiffusion.
+# teller_of_tales
+Create narrated video story from book chapter using NLP, OpenAI and StableDiffusion. 
+*Video creation process is automatic and unsupervised, results may vary.
 
-![alt text](https://github.com/dawmro/teller_of_tales/blob/main/final_video.mp4?raw=true)
+![alt text](https://github.com/dawmro/teller_of_tales/blob/main/images/image2.jpg?raw=true)
+
+## Prerequisites:
+1. Python 3.8.10
+2. NVidia GPU with 8GB VRAM. 
 
 ## Setup:
 1. Create new virtual env:
