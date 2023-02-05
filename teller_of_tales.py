@@ -172,6 +172,10 @@ def prompt_to_image(i, image_prompt, image_width, image_height):
     # consider chunking the attention computation if limited by GPU memory 
     pipe.enable_attention_slicing()
     
+    # uncomment to disable NSFW filter
+    # def dummy_checker(images, **kwargs): return images, False
+    # pipe.safety_checker = dummy_checker
+    
     prompt = image_prompt + possitive_prompt_sufix
         
     image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=25).images[0]
