@@ -2,7 +2,7 @@
 Create narrated video story from book chapter using NLP, OpenAI and StableDiffusion. 
 *Video creation process is automatic and unsupervised, results may vary.
 
-![alt text](https://github.com/dawmro/teller_of_tales/blob/main/images/image2.jpg?raw=true)
+![alt text](https://github.com/dawmro/teller_of_tales/blob/main/screenshot.png?raw=true)
 
 ## Prerequisites:
 1. Python 3.8.10
