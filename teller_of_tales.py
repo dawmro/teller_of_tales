@@ -3,9 +3,20 @@ from datetime import datetime
 import os
 
 
+
+# show step by step debug info?
+DEBUG = True
+
+
+
 def showTime():
     return str("["+datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')+" UTC]")
     
+
+
+def pause():
+    programPause = input("Press the <ENTER> key to continue...")
+
     
     
 def createFolders():
@@ -24,6 +35,9 @@ def createFolders():
 if __name__ == "__main__":
 
     print(f"{showTime()}")
+    
+    if DEBUG:
+        pause()
     
     # Create directiories for text, audio, images and video files    
     createFolders()
