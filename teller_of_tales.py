@@ -1,14 +1,22 @@
 # if first run then run installer 
-import nltk
-nltk.download()
-
+# import nltk
+# nltk.download()
 
 from nltk.tokenize import sent_tokenize, word_tokenize
 from datetime import datetime
-
-import os
-import json
+import time
 import openai
+import json
+import os
+import re
+
+from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+import torch
+
+from gtts import gTTS
+from moviepy.editor import *
+from tqdm.auto import tqdm
+
 
 # Use API_KEY imported from environment variables
 openai.api_key = os.environ['OPENAI_TOKEN']
@@ -21,7 +29,7 @@ FRAGMENT_LENGTH = 10
 
 # select model to use
 model_engine = "text-davinci-003"
-
+   
 
 
 def write_list(a_list, filename):
@@ -36,21 +44,20 @@ def read_list(filename):
     with open(filename, 'rb') as fp:
         n_list = json.load(fp)
         return n_list
-
+    
 
 def showTime():
     return str("["+datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')+" UTC]")
-    
 
 
 def pause():
     programPause = input("Press the <ENTER> key to continue...")
-
     
     
 def createFolders():
     
     if not os.path.exists("text"):
+        print("no path")
         os.makedirs("text") 
     if not os.path.exists("audio"):
         os.makedirs("audio")         
@@ -58,9 +65,8 @@ def createFolders():
         os.makedirs("images")     
     if not os.path.exists("videos"):
         os.makedirs("videos")
-    
-    
-    
+
+
 def load_and_split_to_sentences(filename):
 
     # read raw story from txt file
@@ -85,8 +91,8 @@ def load_and_split_to_sentences(filename):
     story_sentences_list = read_list("text/story_sentences_list.json")
     
     return story_sentences_list
-    
-  
+
+
 def sentences_to_fragments(story_sentences_list, FRAGMENT_LENGTH):
 
     # story divided into fragments
@@ -141,9 +147,40 @@ def sentences_to_fragments(story_sentences_list, FRAGMENT_LENGTH):
     story_fragments = read_list("text/story_fragments.json")
     
     return story_fragments
-  
-  
+    
+    
+def prompt_to_image(i, image_prompt, image_width, image_height):
 
+    # clear cuda cache
+    with torch.no_grad():
+        torch.cuda.empty_cache() 
+    
+    # set parameters for image 
+    seed = 1337
+
+    possitive_prompt_sufix = " (extremely detailed CG unity 8k wallpaper), nostalgia, professional majestic oil painting, trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, dramatic, by midjourney and greg rutkowski, realism, beautiful and detailed lighting, shadows, by Jeremy Lipking"
+
+    negative_prompt = "disfigured, kitsch, ugly, oversaturated, grain, low-res, Deformed, blurry, bad anatomy, disfigured, poorly drawn face, mutation, mutated, extra limb, ugly, poorly drawn hands, missing limb, blurry, floating limbs, disconnected limbs, malformed hands, blur, out of focus, long neck, long body, ugly, disgusting, poorly drawn, childish, mutilated, mangled, old, surreal, text"
+    
+    model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
+    pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
+    pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+    pipe = pipe.to("cuda")
+
+    generator = torch.Generator("cuda").manual_seed(seed)
+    
+    # consider chunking the attention computation if limited by GPU memory 
+    pipe.enable_attention_slicing()
+    
+    prompt = image_prompt + possitive_prompt_sufix
+        
+    image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=25).images[0]
+
+    image.save(f"images/image{i}.jpg")
+    
+   
+        
+    
 def askChatGPT(text, model_engine):
 
     completions = openai.Completion.create(
@@ -154,8 +191,9 @@ def askChatGPT(text, model_engine):
         stop=None,
         temperature=0.9,
     )
-    return completions.choices[0].text  
-  
+    return completions.choices[0].text
+    
+
 
 if __name__ == "__main__":
 
@@ -163,7 +201,7 @@ if __name__ == "__main__":
     
     if DEBUG:
         pause()
-    
+        
     # Create directiories for text, audio, images and video files    
     createFolders()
     
@@ -171,7 +209,11 @@ if __name__ == "__main__":
     story_sentences_list = load_and_split_to_sentences("story.txt")
     
     # group sentences into story fragments of a given length
-    story_fragments = sentences_to_fragments(story_sentences_list, FRAGMENT_LENGTH) 
+    story_fragments = sentences_to_fragments(story_sentences_list, FRAGMENT_LENGTH)
+    
+    # convert each story fragment into prompt and use it to generate image
+    image_width = 1024
+    image_height = 576 
     
     image_prompts = []
     
@@ -189,3 +231,9 @@ if __name__ == "__main__":
         except:
             print(f"{showTime()} Cannot connect with OpenAI servers. \nProbable cause: No Internet connection, Invalid API token, Too much calls in short time")
             exit()
+        
+        # generate image form prompt 
+        prompt_to_image(i, image_prompt, image_width, image_height)
+        
+
+   
