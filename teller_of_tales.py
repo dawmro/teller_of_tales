@@ -211,16 +211,26 @@ def createVideoClip(i, story_fragment):
         
     
 def askChatGPT(text, model_engine):
-
-    completions = openai.Completion.create(
-        engine=model_engine,
-        prompt=text,
-        max_tokens=100,
-        n=1,
-        stop=None,
-        temperature=0.9,
-    )
-    return completions.choices[0].text
+    do_it = True
+    answer = ''
+    while(do_it):
+        try: 
+            completions = openai.Completion.create(
+                engine=model_engine,
+                prompt=text,
+                max_tokens=100,
+                n=1,
+                stop=None,
+                temperature=0.9,
+            )
+            do_it = False
+            answer = completions.choices[0].text
+        except:
+            print("Exception!!! Waiting for 60 seconds and trying again...")
+            time.sleep(60)
+            answer = askChatGPT(text, model_engine)
+    
+    return answer 
     
 
 def createListOfClips():
@@ -258,28 +268,27 @@ if __name__ == "__main__":
     image_prompts = []
     
     # for each story fragment
-    for i, story_fragment in enumerate(story_fragments):
+for i, story_fragment in enumerate(story_fragments):
         print(f"{showTime()}")
+        
         prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
-        # translate fragment into prompt 
-        try:
-            image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
-            print(i, image_prompt)
-            image_prompts.append(image_prompt)
-            write_list(image_prompts, "text/image_prompts.json")
-            image_prompts = read_list("text/image_prompts.json")
-        except:
-            print(f"{showTime()} Cannot connect with OpenAI servers. \nProbable cause: No Internet connection, Invalid API token, Too much calls in short time")
-            exit()
+        
+        # translate fragment into prompt       
+        image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
+        print(i, image_prompt)
+        image_prompts.append(image_prompt)
+        write_list(image_prompts, "text/image_prompts.json")
+        image_prompts = read_list("text/image_prompts.json")  
         
         # generate image form prompt 
         prompt_to_image(i, image_prompt, image_width, image_height)
-        
+
         # create video clip using story fragment and generated image
         createVideoClip(i, story_fragment)
         
         # if DEBUG:
             # pause()
+    
     
     # create sorted list of clips
     print(f"{showTime()} Fixing order of video clips")
