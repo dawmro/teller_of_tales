@@ -7,7 +7,7 @@ Example: https://www.youtube.com/watch?v=AQRwO8k15ZM
 
 ## Prerequisites:
 1. Python 3.8.10
-2. NVidia GPU with 8GB VRAM. 
+2. NVidia GPU with 4GB VRAM. 
 
 ## Setup:
 1. Create new virtual env:
