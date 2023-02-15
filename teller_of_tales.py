@@ -218,12 +218,16 @@ def prompt_to_image(i, image_width, image_height):
     model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
     pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-    pipe = pipe.to("cuda")
-
-    generator = torch.Generator("cuda").manual_seed(seed)
     
-    # consider chunking the attention computation if limited by GPU memory 
-    pipe.enable_attention_slicing()
+    # if limited by GPU memory (4GB VRAM):
+    # 1. do not move the pipeline to CUDA beforehand or else the gain in memory consumption will only be minimal
+    # pipe = pipe.to("cuda")
+    # 2. offload the weights to CPU and only load them to GPU when performing the forward pass
+    pipe.enable_sequential_cpu_offload()
+    # 3. consider chunking the attention computation  
+    pipe.enable_attention_slicing(1)
+    
+    generator = torch.Generator("cuda").manual_seed(seed)
     
     prompt = image_prompt + possitive_prompt_sufix
         
@@ -324,8 +328,10 @@ if __name__ == "__main__":
     number_of_story_fragments = sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH)
     
     # convert each story fragment into prompt and use it to generate image
-    image_width = 1024
-    image_height = 576 
+    # image_width = 1024
+    # image_height = 576 
+    image_width = 1360
+    image_height = 768 
     
     image_prompts = []
     
