@@ -38,6 +38,11 @@ FRAGMENT_LENGTH = 10
 # select model to use
 model_engine = "text-davinci-003"
 
+# set parameters for image 
+seed = 1337
+image_width = 1360
+image_height = 768
+
 # configure coqui-ai/TTS
 '''
 path = "env/Lib/site-packages/TTS/.models.json"
@@ -207,9 +212,6 @@ def prompt_to_image(i, image_width, image_height):
     # clear cuda cache
     with torch.no_grad():
         torch.cuda.empty_cache() 
-    
-    # set parameters for image 
-    seed = 1337
 
     possitive_prompt_sufix = " (extremely detailed CG unity 8k wallpaper), nostalgia, professional majestic oil painting, trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, dramatic, by midjourney and greg rutkowski, realism, beautiful and detailed lighting, shadows, by Jeremy Lipking"
 
@@ -264,7 +266,7 @@ def createVideoClip(i):
     
     # use moviepy to create a text clip from the text
     screensize = (image_width, image_height)
-    text_clip = TextClip(story_fragment, fontsize=46, font="Impact", color="black", stroke_color="white", stroke_width=2, size=screensize, method='caption', align="South")
+    text_clip = TextClip(story_fragment, fontsize=int(0.0599*image_height), font="Impact", color="black", stroke_color="white", stroke_width=round(0.0026*image_height, 1), size=screensize, method='caption', align="South")
     text_clip = text_clip.set_duration(audio_duration)
     
     # concatenate the audio, image, and text clips
@@ -328,11 +330,6 @@ if __name__ == "__main__":
     number_of_story_fragments = sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH)
     
     # convert each story fragment into prompt and use it to generate image
-    # image_width = 1024
-    # image_height = 576 
-    image_width = 1360
-    image_height = 768 
-    
     image_prompts = []
     
     # for each story fragment
