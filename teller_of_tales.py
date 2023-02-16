@@ -264,7 +264,7 @@ def createVideoClip(i):
     
     # use moviepy to create a text clip from the text
     screensize = (image_width, image_height)
-    text_clip = TextClip(story_fragment, fontsize=35, font="Impact", color="black", stroke_color="white", stroke_width=1.5, size=screensize, method='caption', align="South")
+    text_clip = TextClip(story_fragment, fontsize=46, font="Impact", color="black", stroke_color="white", stroke_width=2, size=screensize, method='caption', align="South")
     text_clip = text_clip.set_duration(audio_duration)
     
     # concatenate the audio, image, and text clips
