@@ -20,6 +20,9 @@ from tqdm.auto import tqdm
 import fnmatch
 from pathlib import Path
 
+import edge_tts
+import asyncio
+
 # imports for coqui-ai/TTS
 '''
 from TTS.utils.manage import ModelManager
@@ -41,7 +44,8 @@ model_engine = "text-davinci-003"
 # set parameters for image 
 seed = 1337
 image_width = 1360
-image_height = 768
+image_height = 768 
+
 
 # configure coqui-ai/TTS
 '''
@@ -217,7 +221,7 @@ def prompt_to_image(i, image_width, image_height):
 
     negative_prompt = "disfigured, kitsch, ugly, oversaturated, grain, low-res, Deformed, blurry, bad anatomy, disfigured, poorly drawn face, mutation, mutated, extra limb, ugly, poorly drawn hands, missing limb, blurry, floating limbs, disconnected limbs, malformed hands, blur, out of focus, long neck, long body, ugly, disgusting, poorly drawn, childish, mutilated, mangled, old, surreal, text"
     
-    model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
+    model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
     pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
     
@@ -236,16 +240,30 @@ def prompt_to_image(i, image_width, image_height):
     image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=25).images[0]
 
     image.save(f"images/image{i}.jpg")
+
+
+async def create_vioceover(story_fragment) -> None:
+    TEXT = story_fragment
+    VOICE = "en-GB-SoniaNeural"
+    OUTPUT_FILE = f"audio/voiceover{i}.mp3"
+    communicate = edge_tts.Communicate(TEXT, VOICE)
+    await communicate.save(OUTPUT_FILE)
+    
     
     
 def createVideoClip(i):
 
     story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
     
+    # create voiceover using edge_tts
+    if(Path(f"audio/voiceover{i}.mp3").is_file() == False):
+        asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment))
+ 
+    '''
     # create gTTS instance and save to a file
     tts = gTTS(text=story_fragment, lang='en', slow=False)
     tts.save(f"audio/voiceover{i}.mp3")
-    
+    '''
     # load the audio file using moviepy
     audio_clip = AudioFileClip(f"audio/voiceover{i}.mp3")
     audio_duration = audio_clip.duration
@@ -330,6 +348,7 @@ if __name__ == "__main__":
     number_of_story_fragments = sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH)
     
     # convert each story fragment into prompt and use it to generate image
+
     image_prompts = []
     
     # for each story fragment
