@@ -1,7 +1,7 @@
 # teller_of_tales
 Create narrated video story from book chapter using NLP, OpenAI and StableDiffusion. 
 *Video creation process is automatic and unsupervised, results may vary.
-Example: https://youtu.be/po0LI4lGQjQ?t=32
+Example: https://youtu.be/fz-Ez8PsE5A
 
 ![alt text](https://github.com/dawmro/teller_of_tales/blob/main/screenshot.png?raw=true)
 
