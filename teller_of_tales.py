@@ -43,8 +43,8 @@ model_engine = "text-davinci-003"
 
 # set parameters for image 
 seed = 1337
-image_width = 1360
-image_height = 768 
+image_width = 848
+image_height = 480
 
 
 # configure coqui-ai/TTS
@@ -213,13 +213,14 @@ def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
 def prompt_to_image(i, image_width, image_height):
 
     image_prompt = read_file(f"text/image_prompts/image_prompt{i}.txt")
+    print(i, image_prompt)
     # clear cuda cache
     with torch.no_grad():
         torch.cuda.empty_cache() 
 
-    possitive_prompt_sufix = " (extremely detailed CG unity 8k wallpaper), nostalgia, professional majestic oil painting, trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, dramatic, by midjourney and greg rutkowski, realism, beautiful and detailed lighting, shadows, by Jeremy Lipking"
-
-    negative_prompt = "disfigured, kitsch, ugly, oversaturated, grain, low-res, Deformed, blurry, bad anatomy, disfigured, poorly drawn face, mutation, mutated, extra limb, ugly, poorly drawn hands, missing limb, blurry, floating limbs, disconnected limbs, malformed hands, blur, out of focus, long neck, long body, ugly, disgusting, poorly drawn, childish, mutilated, mangled, old, surreal, text"
+    possitive_prompt_sufix = " [(extremely detailed CG unity 8k wallpaper), nostalgia, professional majestic oil painting by Ed Blinkey, trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, ((dramatic)), by midjourney, realism, [beautiful and detailed lighting], shadows]"
+ 
+    negative_prompt = "canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)),((extra limbs)),((close up)),((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), out of frame, ugly, extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated hands, (fused fingers), (too many fingers), (((long neck))), Photoshop, video game, ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, extra limbs, extra legs, extra arms, disfigured, deformed, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
     
     model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
     pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
@@ -233,7 +234,7 @@ def prompt_to_image(i, image_width, image_height):
     # 3. consider chunking the attention computation  
     pipe.enable_attention_slicing(1)
     
-    generator = torch.Generator("cuda").manual_seed(seed)
+    generator = torch.Generator("cuda")#.manual_seed(seed)
     
     prompt = image_prompt + possitive_prompt_sufix
         
@@ -249,8 +250,7 @@ async def create_vioceover(story_fragment) -> None:
     communicate = edge_tts.Communicate(TEXT, VOICE)
     await communicate.save(OUTPUT_FILE)
     
-    
-    
+   
 def createVideoClip(i):
 
     story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
