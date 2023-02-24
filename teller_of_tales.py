@@ -211,36 +211,45 @@ def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
     
     
 def prompt_to_image(i, image_width, image_height):
+    do_it = True
+    while(do_it):
+        try:
+            image_prompt = read_file(f"text/image_prompts/image_prompt{i}.txt")
+            print(i, image_prompt)
+            # clear cuda cache
+            with torch.no_grad():
+                torch.cuda.empty_cache() 
 
-    image_prompt = read_file(f"text/image_prompts/image_prompt{i}.txt")
-    print(i, image_prompt)
-    # clear cuda cache
-    with torch.no_grad():
-        torch.cuda.empty_cache() 
+            possitive_prompt_sufix = " [(extremely detailed CG unity 8k wallpaper), nostalgia, professional majestic oil painting by Ed Blinkey, trending on ArtStation, trending on CGSociety, High Detail, Sharp focus, ((dramatic)), by midjourney, realism, shadows]"
+         
+            negative_prompt = "canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)),((extra limbs)),((close up)),((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), out of frame, ugly, extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated hands, (fused fingers), (too many fingers), (((long neck))), Photoshop, video game, ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, extra limbs, extra legs, extra arms, disfigured, deformed, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
+            
+            model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
+            pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
+            pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+            
+            # if limited by GPU memory (4GB VRAM):
+            # 1. do not move the pipeline to CUDA beforehand or else the gain in memory consumption will only be minimal
+            # pipe = pipe.to("cuda")
+            # 2. offload the weights to CPU and only load them to GPU when performing the forward pass
+            pipe.enable_sequential_cpu_offload()
+            # 3. consider chunking the attention computation  
+            pipe.enable_attention_slicing(1)
+            
+            generator = torch.Generator("cuda")#.manual_seed(seed)
+            
+            prompt = image_prompt + possitive_prompt_sufix
+                
+            image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=25).images[0]
 
-    possitive_prompt_sufix = " [(extremely detailed CG unity 8k wallpaper), nostalgia, professional majestic oil painting by Ed Blinkey, trending on ArtStation, trending on CGSociety, Intricate, High Detail, Sharp focus, ((dramatic)), by midjourney, realism, [beautiful and detailed lighting], shadows]"
- 
-    negative_prompt = "canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)),((extra limbs)),((close up)),((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), out of frame, ugly, extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated hands, (fused fingers), (too many fingers), (((long neck))), Photoshop, video game, ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, extra limbs, extra legs, extra arms, disfigured, deformed, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
-    
-    model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
-    pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
-    pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-    
-    # if limited by GPU memory (4GB VRAM):
-    # 1. do not move the pipeline to CUDA beforehand or else the gain in memory consumption will only be minimal
-    # pipe = pipe.to("cuda")
-    # 2. offload the weights to CPU and only load them to GPU when performing the forward pass
-    pipe.enable_sequential_cpu_offload()
-    # 3. consider chunking the attention computation  
-    pipe.enable_attention_slicing(1)
-    
-    generator = torch.Generator("cuda")#.manual_seed(seed)
-    
-    prompt = image_prompt + possitive_prompt_sufix
-        
-    image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=25).images[0]
-
-    image.save(f"images/image{i}.jpg")
+            image.save(f"images/image{i}.jpg")
+            
+            do_it = False
+            
+        except:
+            print("Exception!!! From Hugginface probably, don't really care about details. \nWaiting for 60 seconds and trying again...")
+            time.sleep(60)
+            prompt_to_image(i, image_width, image_height)
 
 
 async def create_vioceover(story_fragment) -> None:
