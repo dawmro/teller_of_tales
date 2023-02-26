@@ -41,8 +41,9 @@ FRAGMENT_LENGTH = 10
 # select model to use
 model_engine = "text-davinci-003"
 
-# set parameters for image 
-seed = 1337
+# set parameters for image
+lowmem = True 
+seed = -1
 image_width = 848
 image_height = 480
 
@@ -229,14 +230,22 @@ def prompt_to_image(i, image_width, image_height):
             pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
             
             # if limited by GPU memory (4GB VRAM):
-            # 1. do not move the pipeline to CUDA beforehand or else the gain in memory consumption will only be minimal
-            # pipe = pipe.to("cuda")
-            # 2. offload the weights to CPU and only load them to GPU when performing the forward pass
-            pipe.enable_sequential_cpu_offload()
-            # 3. consider chunking the attention computation  
-            pipe.enable_attention_slicing(1)
+            if lowmem == True: 
+                # 1. do not move the pipeline to CUDA beforehand or else the gain in memory consumption will only be minimal
+                # pipe = pipe.to("cuda")
+                # 2. offload the weights to CPU and only load them to GPU when performing the forward pass
+                pipe.enable_sequential_cpu_offload()
+                # 3. consider chunking the attention computation  
+                pipe.enable_attention_slicing(1)           
+            else:
+                pipe = pipe.to("cuda")
             
-            generator = torch.Generator("cuda")#.manual_seed(seed)
+            # randomize seed
+            if seed == -1:    
+                generator = torch.Generator("cuda")
+            # use manual seed    
+            else:
+                generator = torch.Generator("cuda").manual_seed(seed)
             
             prompt = image_prompt + possitive_prompt_sufix
                 
