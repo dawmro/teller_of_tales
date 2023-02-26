@@ -221,7 +221,7 @@ def prompt_to_image(i, image_width, image_height):
             with torch.no_grad():
                 torch.cuda.empty_cache() 
 
-            possitive_prompt_sufix = " [(extremely detailed CG unity 8k wallpaper), nostalgia, professional majestic oil painting by Ed Blinkey, trending on ArtStation, trending on CGSociety, High Detail, Sharp focus, ((dramatic)), by midjourney, realism, shadows]"
+            possitive_prompt_sufix = " [(extremely detailed CG unity 8k wallpaper), nostalgia, ((professional majestic oil painting)), trending on ArtStation, trending on CGSociety, High Detail, Sharp focus, ((dramatic)), by midjourney, beautiful and detailed lighting, realism, shadows]"
          
             negative_prompt = "canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)),((extra limbs)),((close up)),((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), out of frame, ugly, extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated hands, (fused fingers), (too many fingers), (((long neck))), Photoshop, video game, ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, extra limbs, extra legs, extra arms, disfigured, deformed, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
             
@@ -284,7 +284,11 @@ def createVideoClip(i):
     '''
     # load the audio file using moviepy
     audio_clip = AudioFileClip(f"audio/voiceover{i}.mp3")
-    audio_duration = audio_clip.duration
+    # add audio fadein / fadeout ot minimize sound glitches
+    audio_clip = audio_clip.audio_fadein(0.05).audio_fadeout(0.05)
+    # add 1 second to audio duration, it will be used later to create video transition
+    # 1 second will be removed by video overlap because of padding
+    audio_duration = audio_clip.duration+1
     
     # audio creation using coqui-ai/TTS
     '''
@@ -398,11 +402,16 @@ if __name__ == "__main__":
     clips = createListOfClips()
     
     # add audio fade to prevent audio glitches when combining multiple clips
+    print(f"{showTime()} Adding audio fadein / fadeout...")
     clips = [clip.audio_fadein(0.05).audio_fadeout(0.05) for clip in clips]
+    
+    # add video fade to create smooth transitions
+    print(f"{showTime()} Adding video fadein / faedout...")
+    clips = [clip.crossfadein(1.0).crossfadeout(1.0) for clip in clips]
     
     # combine all clips into final video
     print(f"{showTime()} Concatenate all clips into final video...")
-    final_video = concatenate_videoclips(clips, method="compose")
+    final_video = concatenate_videoclips(clips, padding=-1, method="compose")
     final_video = final_video.write_videofile("final_video.mp4")
     print(f"{showTime()} Final video created successfully!")
 
