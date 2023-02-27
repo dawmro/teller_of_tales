@@ -23,11 +23,6 @@ from pathlib import Path
 import edge_tts
 import asyncio
 
-# imports for coqui-ai/TTS
-'''
-from TTS.utils.manage import ModelManager
-from TTS.utils.synthesizer import Synthesizer
-'''
 
 # Use API_KEY imported from environment variables
 openai.api_key = os.environ['OPENAI_TOKEN']
@@ -46,21 +41,6 @@ lowmem = True
 seed = -1
 image_width = 848
 image_height = 480
-
-
-# configure coqui-ai/TTS
-'''
-path = "env/Lib/site-packages/TTS/.models.json"
-model_manager = ModelManager(path)
-model_path, config_path, model_item = model_manager.download_model("tts_models/en/ljspeech/tacotron2-DDC_ph")
-voc_path, voc_config_path, _ = model_manager.download_model(model_item["default_vocoder"])
-syn = Synthesizer(
-    tts_checkpoint=model_path,
-    tts_config_path=config_path,
-    vocoder_checkpoint=voc_path,
-    vocoder_config=voc_config_path
-)
- ''' 
 
 
 def write_list(a_list, filename):
@@ -276,30 +256,19 @@ def createVideoClip(i):
     # create voiceover using edge_tts
     if(Path(f"audio/voiceover{i}.mp3").is_file() == False):
         asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment))
- 
-    '''
-    # create gTTS instance and save to a file
-    tts = gTTS(text=story_fragment, lang='en', slow=False)
-    tts.save(f"audio/voiceover{i}.mp3")
-    '''
+
     # load the audio file using moviepy
     audio_clip = AudioFileClip(f"audio/voiceover{i}.mp3")
+    
     # add audio fadein / fadeout ot minimize sound glitches
     audio_clip = audio_clip.audio_fadein(0.05).audio_fadeout(0.05)
-    # add 1 second to audio duration, it will be used later to create video transition
-    # 1 second will be removed by video overlap because of padding
-    audio_duration = audio_clip.duration+1
     
-    # audio creation using coqui-ai/TTS
-    '''
-    # create coqui-ai/TTS instance and save to a file
-    outputs = syn.tts(story_fragment.replace('\n', ' '))
-    syn.save_wav(outputs, f"audio/voiceover{i}.mp3")
+    # add 1 second silence to begining of audio 
+    silence = AudioClip(make_frame = lambda t: 0, duration = 1.0)
+    audio_clip = concatenate_audioclips([silence, audio_clip])
     
-    # load the audio file using moviepy
-    audio_clip = AudioFileClip(f"audio/voiceover{i}.mp3")
+    # get audio duration
     audio_duration = audio_clip.duration
-    '''
     
     # load the image file using moviepy
     image_clip = ImageClip(f"images/image{i}.jpg").set_duration(audio_duration)
