@@ -23,6 +23,8 @@ from pathlib import Path
 import edge_tts
 import asyncio
 
+from threading import Thread
+
 
 # Use API_KEY imported from environment variables
 openai.api_key = os.environ['OPENAI_TOKEN']
@@ -37,7 +39,7 @@ FRAGMENT_LENGTH = 10
 model_engine = "text-davinci-003"
 
 # set parameters for image
-lowmem = True 
+lowmem = True
 seed = -1
 image_width = 848
 image_height = 480
@@ -244,6 +246,7 @@ def prompt_to_image(i, image_width, image_height):
 async def create_vioceover(story_fragment) -> None:
     TEXT = story_fragment
     VOICE = "en-GB-SoniaNeural"
+    # VOICE = "en-GB-RyanNeural"
     OUTPUT_FILE = f"audio/voiceover{i}.mp3"
     communicate = edge_tts.Communicate(TEXT, VOICE)
     await communicate.save(OUTPUT_FILE)
@@ -252,10 +255,6 @@ async def create_vioceover(story_fragment) -> None:
 def createVideoClip(i):
 
     story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
-    
-    # create voiceover using edge_tts
-    if(Path(f"audio/voiceover{i}.mp3").is_file() == False):
-        asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment))
 
     # load the audio file using moviepy
     audio_clip = AudioFileClip(f"audio/voiceover{i}.mp3")
@@ -307,7 +306,17 @@ def askChatGPT(text, model_engine):
             time.sleep(60)
             answer = askChatGPT(text, model_engine)
     
-    return answer   
+    return answer  
+
+
+def fragment_toPrompt(i):
+    story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
+    prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
+    # translate fragment into prompt
+    image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
+    print(i, story_fragment)
+    print(i, image_prompt)
+    write_file(image_prompt, f"text/image_prompts/image_prompt{i}.txt")     
     
 
 def createListOfClips():
@@ -344,16 +353,16 @@ if __name__ == "__main__":
     
     # for each story fragment
     for i in range(number_of_story_fragments):
-        print(f"{showTime()}")
+        print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
+        
+        # create voiceover using edge_tts
+        if(Path(f"audio/voiceover{i}.mp3").is_file() == False):
+            story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
+            asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment))
         
         if(Path(f"text/image_prompts/image_prompt{i}.txt").is_file() == False):
-            story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
-            prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
             # translate fragment into prompt
-            image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
-            print(i, story_fragment)
-            print(i, image_prompt)
-            write_file(image_prompt, f"text/image_prompts/image_prompt{i}.txt") 
+            fragment_toPrompt(i)
         
         if(Path(f"images/image{i}.jpg").is_file() == False):
             # generate image form prompt 
@@ -361,10 +370,24 @@ if __name__ == "__main__":
         
         if(Path(f"videos/video{i}.mp4").is_file() == False):
             # create video clip using story fragment and generated image
-            createVideoClip(i)
+            # create a new thread
+            thread = Thread(target=createVideoClip, args=[i])
+            # start the new thread
+            thread.start()
         
         # if DEBUG:
             # pause()
+            
+            
+    # wait for the new thread to finish
+    print('Main: Waiting for thread to terminate...')
+    thread.join(timeout=30)
+    # continue on
+    print('Main: Continuing on')
+    if thread.is_alive():
+        print('Main: The target thread is still running')
+    else:
+        print('Main: The target thread has terminated')
     
     # create sorted list of clips
     print(f"{showTime()} Fixing order of video clips")
@@ -372,7 +395,7 @@ if __name__ == "__main__":
     
     # add audio fade to prevent audio glitches when combining multiple clips
     print(f"{showTime()} Adding audio fadein / fadeout...")
-    clips = [clip.audio_fadein(0.05).audio_fadeout(0.05) for clip in clips]
+    clips = [clip.audio_fadein(0.10).audio_fadeout(0.10) for clip in clips]
     
     # add video fade to create smooth transitions
     print(f"{showTime()} Adding video fadein / faedout...")
@@ -386,3 +409,122 @@ if __name__ == "__main__":
 
         
    
+   
+'''
+Name: en-AU-NatashaNeural
+Gender: Female
+
+Name: en-AU-WilliamNeural
+Gender: Male
+
+Name: en-CA-ClaraNeural
+Gender: Female
+
+Name: en-CA-LiamNeural
+Gender: Male
+
+Name: en-GB-LibbyNeural
+Gender: Female
+
+Name: en-GB-MaisieNeural
+Gender: Female
+
+Name: en-GB-RyanNeural
+Gender: Male
+
+Name: en-GB-SoniaNeural
+Gender: Female
+
+Name: en-GB-ThomasNeural
+Gender: Male
+
+Name: en-HK-SamNeural
+Gender: Male
+
+Name: en-HK-YanNeural
+Gender: Female
+
+Name: en-IE-ConnorNeural
+Gender: Male
+
+Name: en-IE-EmilyNeural
+Gender: Female
+
+Name: en-IN-NeerjaExpressiveNeural
+Gender: Female
+
+Name: en-IN-NeerjaNeural
+Gender: Female
+
+Name: en-IN-PrabhatNeural
+Gender: Male
+
+Name: en-KE-AsiliaNeural
+Gender: Female
+
+Name: en-KE-ChilembaNeural
+Gender: Male
+
+Name: en-NG-AbeoNeural
+Gender: Male
+
+Name: en-NG-EzinneNeural
+Gender: Female
+
+Name: en-NZ-MitchellNeural
+Gender: Male
+
+Name: en-NZ-MollyNeural
+Gender: Female
+
+Name: en-PH-JamesNeural
+Gender: Male
+
+Name: en-PH-RosaNeural
+Gender: Female
+
+Name: en-SG-LunaNeural
+Gender: Female
+
+Name: en-SG-WayneNeural
+Gender: Male
+
+Name: en-TZ-ElimuNeural
+Gender: Male
+
+Name: en-TZ-ImaniNeural
+Gender: Female
+
+Name: en-US-AnaNeural
+Gender: Female
+
+Name: en-US-AriaNeural
+Gender: Female
+
+Name: en-US-ChristopherNeural
+Gender: Male
+
+Name: en-US-EricNeural
+Gender: Male
+
+Name: en-US-GuyNeural
+Gender: Male
+
+Name: en-US-JennyNeural
+Gender: Female
+
+Name: en-US-MichelleNeural
+Gender: Female
+
+Name: en-US-RogerNeural
+Gender: Male
+
+Name: en-US-SteffanNeural
+Gender: Male
+
+Name: en-ZA-LeahNeural
+Gender: Female
+
+Name: en-ZA-LukeNeural
+Gender: Male
+'''
