@@ -207,7 +207,8 @@ def prompt_to_image(i, image_width, image_height):
          
             negative_prompt = "canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)),((extra limbs)),((close up)),((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), out of frame, ugly, extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated hands, (fused fingers), (too many fingers), (((long neck))), Photoshop, video game, ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, extra limbs, extra legs, extra arms, disfigured, deformed, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
             
-            model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
+            model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
+            # model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
             pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
             pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
             
