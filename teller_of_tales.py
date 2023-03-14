@@ -232,7 +232,7 @@ def prompt_to_image(i, image_width, image_height):
             
             prompt = image_prompt + possitive_prompt_sufix
                 
-            image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=25).images[0]
+            image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=10).images[0]
 
             image.save(f"images/image{i}.jpg")
             
