@@ -30,7 +30,7 @@ from threading import Thread
 openai.api_key = os.environ['OPENAI_TOKEN']
 
 # show step by step debug info?
-DEBUG = True
+DEBUG = False
 
 # minimal amount of words to put in each story fragment
 FRAGMENT_LENGTH = 10
@@ -39,17 +39,19 @@ FRAGMENT_LENGTH = 10
 model_engine = "text-davinci-003"
 
 # set parameters for image
-lowmem = True
+lowmem = False
 seed = -1
 image_width = 848
 image_height = 480
 
 
 def write_list(a_list, filename):
-    print("Started writing list data into a json file")
+    if DEBUG:
+        print("Started writing list data into a json file")
     with open(filename, "w") as fp:
         json.dump(a_list, fp)
-        print("Done writing JSON data into .json file")
+        if DEBUG:
+            print("Done writing JSON data into .json file")
 
 
 def read_list(filename):
@@ -60,10 +62,12 @@ def read_list(filename):
         
                 
 def write_file(file_content, filename):
-    print("Started writing file_content data into a file")
+    if DEBUG:
+        print("Started writing file_content data into a file")
     with open(filename, "w") as fp:
         fp.write(file_content)
-        print("Done file_content data into a file")
+        if DEBUG:
+            print("Done file_content data into a file")
         
         
 def read_file(filename):
@@ -193,11 +197,11 @@ def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
     return number_of_files
     
     
-def prompt_to_image(i, image_width, image_height):
+def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
     do_it = True
     while(do_it):
         try:
-            image_prompt = read_file(f"text/image_prompts/image_prompt{i}.txt")
+            image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
             print(i, image_prompt)
             # clear cuda cache
             with torch.no_grad():
@@ -205,7 +209,7 @@ def prompt_to_image(i, image_width, image_height):
 
             possitive_prompt_sufix = " [(extremely detailed), (masterpiece, realistic:1.3), nostalgia, ((professional majestic oil painting)), trending on ArtStation, trending on CGSociety,  sharp focus, ((dramatic)), by midjourney, (extremely intricate:1.2)] "
          
-            negative_prompt = "tits, naked, genitalia, canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)), ((extra limbs)), ((close up)), ((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), ugly, extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), (fused fingers), (too many fingers), (((long neck))), Photoshop, ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, disfigured, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"            
+            negative_prompt = "tits, naked, genitalia, canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)), ((extra limbs)), ((close up)), ((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), ugly, extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), (fused fingers), (too many fingers), (((long neck))), Photoshop, ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, disfigured, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
             
             model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
             # model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
@@ -215,7 +219,7 @@ def prompt_to_image(i, image_width, image_height):
             # if limited by GPU memory (4GB VRAM):
             if lowmem == True: 
                 # 1. do not move the pipeline to CUDA beforehand or else the gain in memory consumption will only be minimal
-                # pipe = pipe.to("cuda")
+                pipe = pipe.to("cuda")
                 # 2. offload the weights to CPU and only load them to GPU when performing the forward pass
                 pipe.enable_sequential_cpu_offload()
                 # 3. consider chunking the attention computation  
@@ -229,36 +233,41 @@ def prompt_to_image(i, image_width, image_height):
             # use manual seed    
             else:
                 generator = torch.Generator("cuda").manual_seed(seed)
+                
+            # uncomment to disable NSFW filter
+            # def dummy_checker(images, **kwargs): return images, False
+            # pipe.safety_checker = dummy_checker
             
             prompt = image_prompt + possitive_prompt_sufix
                 
             image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=10).images[0]
 
-            image.save(f"images/image{i}.jpg")
+            image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")
             
             do_it = False
             
         except:
             print("Exception!!! From Hugginface probably, don't really care about details. \nWaiting for 60 seconds and trying again...")
             time.sleep(60)
-            prompt_to_image(i, image_width, image_height)
+            prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR)
 
 
-async def create_vioceover(story_fragment) -> None:
+async def create_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
     TEXT = story_fragment
-    VOICE = "en-GB-SoniaNeural"
-    # VOICE = "en-GB-RyanNeural"
-    OUTPUT_FILE = f"audio/voiceover{i}.mp3"
+    # VOICE = "en-GB-SoniaNeural"
+    VOICE = "en-GB-RyanNeural"
+    # VOICE =  "en-GB-ThomasNeural"
+    OUTPUT_FILE = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3"
     communicate = edge_tts.Communicate(TEXT, VOICE)
     await communicate.save(OUTPUT_FILE)
     
    
-def createVideoClip(i):
+def createVideoClip(i, CURRENT_PROJECT_DIR):
 
-    story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
+    story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
 
     # load the audio file using moviepy
-    audio_clip = AudioFileClip(f"audio/voiceover{i}.mp3")
+    audio_clip = AudioFileClip(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3")
     
     # add audio fadein / fadeout ot minimize sound glitches
     audio_clip = audio_clip.audio_fadein(0.05).audio_fadeout(0.05)
@@ -271,7 +280,7 @@ def createVideoClip(i):
     audio_duration = audio_clip.duration
     
     # load the image file using moviepy
-    image_clip = ImageClip(f"images/image{i}.jpg").set_duration(audio_duration)
+    image_clip = ImageClip(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").set_duration(audio_duration)
     
     # use moviepy to create a text clip from the text
     screensize = (image_width, image_height)
@@ -283,7 +292,7 @@ def createVideoClip(i):
     video = CompositeVideoClip([clip, text_clip])
     
     # save Video Clip to a file
-    video = video.write_videofile(f"videos/video{i}.mp4", fps=24)
+    video = video.write_videofile(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4", fps=24)
     print(f"{showTime()} The Video{i} Has Been Created Successfully!")
         
     
@@ -310,89 +319,33 @@ def askChatGPT(text, model_engine):
     return answer  
 
 
-def fragment_toPrompt(i):
-    story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
+def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
+    story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
     prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
     # translate fragment into prompt
     image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
     print(i, story_fragment)
     print(i, image_prompt)
-    write_file(image_prompt, f"text/image_prompts/image_prompt{i}.txt")     
+    write_file(image_prompt, f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")     
     
 
-def createListOfClips():
+def createListOfClips(CURRENT_PROJECT_DIR):
 
     clips = []
-    l_files = os.listdir("videos")
+    l_files = os.listdir(CURRENT_PROJECT_DIR+"/videos")
     l_files.sort(key=lambda f: int(re.sub('\D', '', f)))
     for file in l_files:
-        clip = VideoFileClip(f"videos/{file}")
+        clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/videos/{file}")
         clips.append(clip)
     
     return clips
 
 
-if __name__ == "__main__":
+def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
 
-    print(f"{showTime()}")
-    
-    if DEBUG:
-        pause()
-        
-    # Create directiories for text, audio, images and video files    
-    createFolders()
-    
-    # load story and split it by sentence
-    number_of_story_sentences = load_and_split_to_sentences("story.txt")
-    
-    # group sentences into story fragments of a given length
-    number_of_story_fragments = sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH)
-    
-    # convert each story fragment into prompt and use it to generate image
-
-    image_prompts = []
-    
-    # for each story fragment
-    for i in range(number_of_story_fragments):
-        print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
-        
-        # create voiceover using edge_tts
-        if(Path(f"audio/voiceover{i}.mp3").is_file() == False):
-            story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
-            asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment))
-        
-        if(Path(f"text/image_prompts/image_prompt{i}.txt").is_file() == False):
-            # translate fragment into prompt
-            fragment_toPrompt(i)
-        
-        if(Path(f"images/image{i}.jpg").is_file() == False):
-            # generate image form prompt 
-            prompt_to_image(i, image_width, image_height)
-        
-        if(Path(f"videos/video{i}.mp4").is_file() == False):
-            # create video clip using story fragment and generated image
-            # create a new thread
-            thread = Thread(target=createVideoClip, args=[i])
-            # start the new thread
-            thread.start()
-        
-        # if DEBUG:
-            # pause()
-            
-            
-    # wait for the new thread to finish
-    print('Main: Waiting for thread to terminate...')
-    thread.join(timeout=30)
-    # continue on
-    print('Main: Continuing on')
-    if thread.is_alive():
-        print('Main: The target thread is still running')
-    else:
-        print('Main: The target thread has terminated')
-    
     # create sorted list of clips
     print(f"{showTime()} Fixing order of video clips")
-    clips = createListOfClips()
+    clips = createListOfClips(CURRENT_PROJECT_DIR)
     
     # add audio fade to prevent audio glitches when combining multiple clips
     print(f"{showTime()} Adding audio fadein / fadeout...")
@@ -405,8 +358,96 @@ if __name__ == "__main__":
     # combine all clips into final video
     print(f"{showTime()} Concatenate all clips into final video...")
     final_video = concatenate_videoclips(clips, padding=-1, method="compose")
-    final_video = final_video.write_videofile("final_video.mp4")
+    final_video = final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4")
     print(f"{showTime()} Final video created successfully!")
+
+
+if __name__ == "__main__":
+
+    print(f"{showTime()}")
+    # Get current working directory
+    CWD = os.getcwd()
+    # set name for main directory for projects
+    PROJECTS_DIR = 'projects'
+    # list each project in PROJECTS_DIR
+    project_names_mixed = [ f.name for f in os.scandir(PROJECTS_DIR) if f.is_dir() ]
+    
+    # sort project directiories by name
+    project_names = []
+    project_names_mixed.sort(key=lambda f: int(re.sub('\D', '', f)))
+    for project_name_mixed in project_names_mixed:
+        project_names.append(project_name_mixed)
+       
+    # run each project in PROJECTS_DIR in sequence
+    for project_name in project_names:
+        CURRENT_PROJECT_DIR = CWD+'/'+PROJECTS_DIR+'/'+project_name
+        os.chdir(CURRENT_PROJECT_DIR)
+        print("Current working directory: {0}".format(os.getcwd())) 
+        
+        if(Path(f"{CURRENT_PROJECT_DIR}/{project_name}.mp4").is_file() == False):
+            if DEBUG:
+                pause()
+                
+            # Create directiories for text, audio, images and video files    
+            createFolders()
+            
+            # load story and split it by sentence
+            number_of_story_sentences = load_and_split_to_sentences("story.txt")
+            
+            # group sentences into story fragments of a given length
+            number_of_story_fragments = sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH)
+            
+            # convert each story fragment into prompt and use it to generate image
+            
+            image_prompts = []
+            
+            using_video_fragments_Threads = False
+            
+            # for each story fragment
+            for i in range(number_of_story_fragments):
+                print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
+                
+                # create voiceover using edge_tts
+                if(Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3").is_file() == False):
+                    story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
+                    asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment, CURRENT_PROJECT_DIR))
+                
+                if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt").is_file() == False):
+                    # translate fragment into prompt
+                    fragment_toPrompt(i, CURRENT_PROJECT_DIR)
+                
+                if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
+                    # generate image form prompt 
+                    prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR)
+                
+                if(Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
+                    # create video clip using story fragment and generated image
+                    # create a new thread
+                    using_video_fragments_Threads = True
+                    thread = Thread(target=createVideoClip, args=[i, CURRENT_PROJECT_DIR])
+                    # start the new thread
+                    thread.start()
+                
+                # if DEBUG:
+                    # pause()
+                    
+            if(using_video_fragments_Threads):
+                # wait for the new thread to finish
+                print('Main: Waiting for thread to terminate...')
+                # block until all tasks are done
+                thread.join()
+                # continue on
+                print('Main: Continuing on')
+
+            # set video fragments status as done
+            #with open('video_fragments_done', 'w') as fp:
+            #    fp.close()
+            
+            if(Path(CURRENT_PROJECT_DIR+'/'+project_name+".mp4").is_file() == False):
+                final_video_thread = Thread(target=makeFinalVideo, args=[project_name, CURRENT_PROJECT_DIR])
+                # start the new thread
+                final_video_thread.start()
+            
 
         
    
