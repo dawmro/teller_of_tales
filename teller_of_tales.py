@@ -201,18 +201,18 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
     do_it = True
     while(do_it):
         try:
-            image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
-            print(i, image_prompt)
+            
             # clear cuda cache
             with torch.no_grad():
                 torch.cuda.empty_cache() 
 
-            possitive_prompt_sufix = " [(extremely detailed), (masterpiece, realistic:1.3), nostalgia, ((professional majestic oil painting)), trending on ArtStation, trending on CGSociety,  sharp focus, ((dramatic)), by midjourney, (extremely intricate:1.2)] "
+            possitive_prompt_sufix = " [High Detail, (highest quality), (realistic:1.3), (extremely detailed CG unity 8k wallpaper), intricate details, HDR, (masterpiece), (by midjourney), intricate:1.2, dramatic, fantasy]"
          
-            negative_prompt = "tits, naked, genitalia, canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)), ((extra limbs)), ((close up)), ((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), ugly, extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), (fused fingers), (too many fingers), (((long neck))), Photoshop, ugly, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, disfigured, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
+            negative_prompt = "genitalia, canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)), ((extra limbs)), ((close up)), ((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), (fused fingers), (too many fingers), (((long neck))), Photoshop, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, disfigured, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
             
-            model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
-            # model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
+            # model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
+            model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
+            # model_id = "Lykon/DreamShaper"
             pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
             pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
             
@@ -235,9 +235,11 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
                 generator = torch.Generator("cuda").manual_seed(seed)
                 
             # uncomment to disable NSFW filter
-            # def dummy_checker(images, **kwargs): return images, False
-            # pipe.safety_checker = dummy_checker
+            def dummy_checker(images, **kwargs): return images, False
+            pipe.safety_checker = dummy_checker
             
+            image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
+            print(i, image_prompt)
             prompt = image_prompt + possitive_prompt_sufix
                 
             image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=10).images[0]
@@ -246,8 +248,8 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
             
             do_it = False
             
-        except:
-            print("Exception!!! From Hugginface probably, don't really care about details. \nWaiting for 60 seconds and trying again...")
+        except Exception as e:
+            print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
             time.sleep(60)
             prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR)
 
@@ -308,15 +310,18 @@ def askChatGPT(text, model_engine):
                 n=1,
                 stop=None,
                 temperature=0.9,
+                request_timeout=10.0, # test
             )
             do_it = False
             answer = completions.choices[0].text
-        except:
-            print("Exception!!! Waiting for 60 seconds and trying again...")
-            time.sleep(60)
+        except Exception as e:
+            wait_time = 10
+            print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
+            time.sleep(wait_time)
             answer = askChatGPT(text, model_engine)
     
     return answer  
+
 
 
 def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
@@ -402,7 +407,7 @@ if __name__ == "__main__":
             image_prompts = []
             
             using_video_fragments_Threads = False
-            
+  
             # for each story fragment
             for i in range(number_of_story_fragments):
                 print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
@@ -430,14 +435,14 @@ if __name__ == "__main__":
                 
                 # if DEBUG:
                     # pause()
-                    
+ 
             if(using_video_fragments_Threads):
                 # wait for the new thread to finish
-                print('Main: Waiting for thread to terminate...')
+                print('Main: Waiting for video_fragments thread to terminate...')
                 # block until all tasks are done
                 thread.join()
                 # continue on
-                print('Main: Continuing on')
+                print('Main: video_fragments joined, continuing on')
 
             # set video fragments status as done
             #with open('video_fragments_done', 'w') as fp:
