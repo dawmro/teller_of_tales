@@ -25,9 +25,17 @@ import asyncio
 
 from threading import Thread
 
+# for extracting keywords
+from keybert import KeyBERT
 
-# Use API_KEY imported from environment variables
-openai.api_key = os.environ['OPENAI_TOKEN']
+
+# set to True if you want to generate image prompts with ChatGPT (costs money)
+# set to False if you want to extract keywords using KeyBERT (is free)
+USE_CHATGPT = False
+
+if USE_CHATGPT == True:
+    # Use API_KEY imported from environment variables
+    openai.api_key = os.environ['OPENAI_TOKEN']
 
 # show step by step debug info?
 DEBUG = False
@@ -43,6 +51,7 @@ lowmem = False
 seed = -1
 image_width = 848
 image_height = 480
+
 
 
 def write_list(a_list, filename):
@@ -206,7 +215,7 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
             with torch.no_grad():
                 torch.cuda.empty_cache() 
 
-            possitive_prompt_sufix = " [High Detail, (highest quality), (realistic:1.3), (extremely detailed CG unity 8k wallpaper), intricate details, HDR, (masterpiece), (by midjourney), intricate:1.2, dramatic, fantasy]"
+            possitive_prompt_sufix = ", [High Detail, (highest quality), (realistic:1.3), (extremely detailed CG unity 8k wallpaper), intricate details, HDR, (masterpiece), (by midjourney), intricate:1.2, dramatic, fantasy]"
          
             negative_prompt = "genitalia, canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)), ((extra limbs)), ((close up)), ((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), (fused fingers), (too many fingers), (((long neck))), Photoshop, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, disfigured, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
             
@@ -326,11 +335,27 @@ def askChatGPT(text, model_engine):
 
 def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
     story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
-    prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
-    # translate fragment into prompt
-    image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
-    print(i, story_fragment)
-    print(i, image_prompt)
+    print(f"{i} Fragment: {story_fragment}")
+    
+    if USE_CHATGPT == True:
+        prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
+        # translate fragment into prompt
+        image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
+        
+    else:
+        kw_model = KeyBERT(model='all-mpnet-base-v2')
+        keywords = kw_model.extract_keywords(
+            story_fragment, 
+            keyphrase_ngram_range=(1, 3), 
+            stop_words='english', 
+            highlight=False,
+            top_n=3
+        )
+        keywords_list = list(dict(keywords).keys())
+        
+        image_prompt = ', '.join(keywords_list)       
+    
+    print(f"{i} Prompt: {image_prompt}")
     write_file(image_prompt, f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")     
     
 
