@@ -1,6 +1,8 @@
 # teller_of_tales
 
-* Create narrated video story from book chapter using NLP, OpenAI and StableDiffusion. 
+## Features:
+* Create narrated video story from book chapter using NLP, OpenAI and StableDiffusion.
+* Using keyBERT instead of ChatGPT as a free option is available. 
 * You can run multiple projects at once to create multiple narrated videos. 
 * Video creation process is automatic and unsupervised, results may vary.
 Example: https://youtu.be/fz-Ez8PsE5A
@@ -39,6 +41,10 @@ Add both check boxes:
 6. Add your OpenAI Token from https://beta.openai.com/account/api-keys to environment variables:
 ``` sh
 setx OPENAI_TOKEN=your_token
+```
+6a. Don't want to use OpenAI account? No problem! Make sure that USE_CHATGPT in line 34 is set to False:
+``` sh
+USE_CHATGPT = False
 ```
 7. Login to HugginFace using your Access Token from https://huggingface.co/settings/tokens:
 ``` sh
