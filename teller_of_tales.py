@@ -73,14 +73,14 @@ def read_list(filename):
 def write_file(file_content, filename):
     if DEBUG:
         print("Started writing file_content data into a file")
-    with open(filename, "w") as fp:
+    with open(filename, "w", encoding='utf-8') as fp:
         fp.write(file_content)
         if DEBUG:
             print("Done file_content data into a file")
         
         
 def read_file(filename):
-    with open(filename, "r", encoding='cp1252') as fp:
+    with open(filename, "r", encoding='utf-8') as fp:
         file_content = fp.read()
         return file_content
     
