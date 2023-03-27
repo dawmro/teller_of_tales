@@ -47,7 +47,7 @@ FRAGMENT_LENGTH = 10
 model_engine = "text-davinci-003"
 
 # set parameters for image
-lowmem = False
+lowmem = True
 seed = -1
 image_width = 848
 image_height = 480
@@ -260,7 +260,6 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
         except Exception as e:
             print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
             time.sleep(60)
-            prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR)
 
 
 async def create_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
@@ -327,7 +326,6 @@ def askChatGPT(text, model_engine):
             wait_time = 10
             print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
             time.sleep(wait_time)
-            answer = askChatGPT(text, model_engine)
     
     return answer  
 
