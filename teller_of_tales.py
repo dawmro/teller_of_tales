@@ -47,7 +47,7 @@ FRAGMENT_LENGTH = 10
 model_engine = "text-davinci-003"
 
 # set parameters for image
-lowmem = True
+lowmem = False
 seed = -1
 image_width = 848
 image_height = 480
@@ -208,6 +208,8 @@ def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
     
 def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
     do_it = True
+    image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
+    print(i, image_prompt)
     while(do_it):
         try:
             
@@ -247,8 +249,7 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
             def dummy_checker(images, **kwargs): return images, False
             pipe.safety_checker = dummy_checker
             
-            image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
-            print(i, image_prompt)
+            
             prompt = image_prompt + possitive_prompt_sufix
                 
             image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=10).images[0]
@@ -263,6 +264,7 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
 
 
 async def create_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
+    
     TEXT = story_fragment
     # VOICE = "en-GB-SoniaNeural"
     VOICE = "en-GB-RyanNeural"
@@ -438,7 +440,15 @@ if __name__ == "__main__":
                 # create voiceover using edge_tts
                 if(Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3").is_file() == False):
                     story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
-                    asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment, CURRENT_PROJECT_DIR))
+                    do_it = True
+                    while(do_it):
+                        try: 
+                            asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment, CURRENT_PROJECT_DIR))
+                            do_it = False
+                        except Exception as e:
+                            wait_time = 10
+                            print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
+                            time.sleep(wait_time)
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt").is_file() == False):
                     # translate fragment into prompt
