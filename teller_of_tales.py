@@ -206,7 +206,7 @@ def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
     return number_of_files
     
     
-def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
+def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJECT_DIR):
     do_it = True
     image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
     print(i, image_prompt)
@@ -214,13 +214,14 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
         try:
             
             # clear cuda cache
-            with torch.no_grad():
-                torch.cuda.empty_cache() 
+            #with torch.no_grad():
+            #    torch.cuda.empty_cache() 
 
             possitive_prompt_sufix = ", [High Detail, (highest quality), (realistic:1.3), (extremely detailed CG unity 8k wallpaper), intricate details, HDR, (masterpiece), (by midjourney), intricate:1.2, dramatic, fantasy]"
          
             negative_prompt = "genitalia, canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)), ((extra limbs)), ((close up)), ((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), (fused fingers), (too many fingers), (((long neck))), Photoshop, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, disfigured, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
             
+            '''
             # model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
             model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
             # model_id = "Lykon/DreamShaper"
@@ -248,7 +249,7 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR):
             # uncomment to disable NSFW filter
             def dummy_checker(images, **kwargs): return images, False
             pipe.safety_checker = dummy_checker
-            
+            '''
             
             prompt = image_prompt + possitive_prompt_sufix
                 
@@ -394,6 +395,42 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
 
 if __name__ == "__main__":
 
+    # prepare StableDiffusionPipeline start
+    # clear cuda cache
+    with torch.no_grad():
+        torch.cuda.empty_cache()
+        
+    model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
+    # model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
+    # model_id = "Lykon/DreamShaper"
+    # model_id = "SG161222/Realistic_Vision_V2.0"
+    pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
+    pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+    
+    # if limited by GPU memory (4GB VRAM):
+    if lowmem == True: 
+        # 1. do not move the pipeline to CUDA beforehand or else the gain in memory consumption will only be minimal
+        # pipe = pipe.to("cuda")
+        # 2. offload the weights to CPU and only load them to GPU when performing the forward pass
+        pipe.enable_sequential_cpu_offload()
+        # 3. consider chunking the attention computation  
+        pipe.enable_attention_slicing(1)           
+    else:
+        pipe = pipe.to("cuda")
+    
+    # randomize seed
+    if seed == -1:    
+        generator = torch.Generator("cuda")
+    # use manual seed    
+    else:
+        generator = torch.Generator("cuda").manual_seed(seed)
+        
+    # uncomment to disable NSFW filter
+    def dummy_checker(images, **kwargs): return images, False
+    pipe.safety_checker = dummy_checker 
+    # prepare StableDiffusionPipeline end
+    
+
     print(f"{showTime()}")
     # Get current working directory
     CWD = os.getcwd()
@@ -456,7 +493,7 @@ if __name__ == "__main__":
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
                     # generate image form prompt 
-                    prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR)
+                    prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJECT_DIR)
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
                     # create video clip using story fragment and generated image
