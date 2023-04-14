@@ -25,6 +25,9 @@ import asyncio
 
 from threading import Thread
 
+import multiprocessing
+from multiprocessing import Process
+
 # for extracting keywords
 from keybert import KeyBERT
 
@@ -519,9 +522,12 @@ if __name__ == "__main__":
             #    fp.close()
             
             if(Path(CURRENT_PROJECT_DIR+'/'+project_name+".mp4").is_file() == False):
-                final_video_thread = Thread(target=makeFinalVideo, args=[project_name, CURRENT_PROJECT_DIR])
+                # final_video_thread = Thread(target=makeFinalVideo, args=[project_name, CURRENT_PROJECT_DIR])
                 # start the new thread
-                final_video_thread.start()
+                # final_video_thread.start()
+                
+                final_video_process = Process(target = makeFinalVideo, args = (project_name, CURRENT_PROJECT_DIR))
+                final_video_process.start()
             
 
         
