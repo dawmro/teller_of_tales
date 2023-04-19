@@ -9,6 +9,19 @@ Example: https://youtu.be/fz-Ez8PsE5A
 
 ![alt text](https://github.com/dawmro/teller_of_tales/blob/main/screenshot.png?raw=true)
 
+## How does it work (simplified workflow):
+1. User places chapter of a book into 'story.txt' file in 'projects/my_project_name' directory.
+2. User starts program with 'python .\teller_of_tales.py' command.
+3. User goes away to do his own things.
+4. Text in chapter is being split into separate sentences.
+5. Sentences are being combined into fragments of appropriate length.
+6. Each text fragment is converted to audio file using text to speach.
+7. For each fragment prompts are being created using ChatGPT or KeyBERT. Prompts describe situation that 'can be seen' in a given fragment.
+8. Using StableDiffusion image is being created that is based on prompts created earlier.
+9. Using MoviePy audio and image files are transformed into video file of current scene.
+10. Video files of separate scenes are concatenated into final video file.
+11. User comes back and watches final video file.
+
 ## Prerequisites:
 1. Python 3.8.10
 2. NVidia GPU with 4GB VRAM. 
@@ -42,7 +55,7 @@ Add both check boxes:
 ``` sh
 setx OPENAI_TOKEN=your_token
 ```
-6a. Don't want to use OpenAI account? No problem! Make sure that USE_CHATGPT in line 34 is set to False:
+6a. Don't want to use OpenAI account? No problem! Make sure that USE_CHATGPT in line 37 is set to False:
 ``` sh
 USE_CHATGPT = False
 ```
