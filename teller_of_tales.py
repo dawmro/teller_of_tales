@@ -54,6 +54,7 @@ lowmem = False
 seed = -1
 image_width = 848
 image_height = 480
+ 
 
 
 
@@ -121,7 +122,11 @@ def load_and_split_to_sentences(filename):
         story_raw = file.read()
 
     # remove quotes from story
-    story = story_raw.replace('“', '').replace('”', '').replace('——', ' ')
+    # wotw
+    #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('*', ' ').replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('_', '')
+    
+    # summoning america and wait is this just gate
+    story = story_raw.replace('“', '').replace('”', '').replace('—', ' ')
 
     # split story into list of sentences
     story_sentences_list = sent_tokenize(story)
@@ -207,52 +212,37 @@ def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
     print('number_of_files:', number_of_files)
     
     return number_of_files
-    
+      
     
 def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJECT_DIR):
     do_it = True
+    wait_time = 10
     image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
     print(i, image_prompt)
     while(do_it):
         try:
-            
-            # clear cuda cache
-            #with torch.no_grad():
-            #    torch.cuda.empty_cache() 
 
+            # summining america
+            '''
             possitive_prompt_sufix = ", [High Detail, (highest quality), (realistic:1.3), (extremely detailed CG unity 8k wallpaper), intricate details, HDR, (masterpiece), (by midjourney), intricate:1.2, dramatic, fantasy]"
          
             negative_prompt = "genitalia, canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)), ((extra limbs)), ((close up)), ((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), (fused fingers), (too many fingers), (((long neck))), Photoshop, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, disfigured, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
-            
             '''
-            # model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
-            model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
-            # model_id = "Lykon/DreamShaper"
-            pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
-            pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+
             
-            # if limited by GPU memory (4GB VRAM):
-            if lowmem == True: 
-                # 1. do not move the pipeline to CUDA beforehand or else the gain in memory consumption will only be minimal
-                pipe = pipe.to("cuda")
-                # 2. offload the weights to CPU and only load them to GPU when performing the forward pass
-                pipe.enable_sequential_cpu_offload()
-                # 3. consider chunking the attention computation  
-                pipe.enable_attention_slicing(1)           
-            else:
-                pipe = pipe.to("cuda")
-            
-            # randomize seed
-            if seed == -1:    
-                generator = torch.Generator("cuda")
-            # use manual seed    
-            else:
-                generator = torch.Generator("cuda").manual_seed(seed)
-                
-            # uncomment to disable NSFW filter
-            def dummy_checker(images, **kwargs): return images, False
-            pipe.safety_checker = dummy_checker
+            # wotw
             '''
+            possitive_prompt_sufix = ", [(4k), color hand drawn anime wallpaper, (masterpiece), (highest quality), ((2d)), ultra detailed anime artwork, (best quality), (90s anime screencap:1.2), intricate details, adult, fantasy],"
+            
+            negative_prompt = "genitalia, japanese text, close up, canvas frame, cartoon, text, logo, (cgi), (3d render), (worst quality, low quality:1.4), blurry, multiple images, bad anatomy, bad proportions, ((3d)), kids, (photorealistic), (lowres:1.1), (monochrome:1.1), ((black and white)), (greyscale), multiple views, cross-eye, sketch, (blurry:1.05), deformed eyes,  (((duplicate))), ((mutilated)), extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated arms, (((long neck))), melting faces, long neck, flat color, flat shading, (bad legs), one leg, extra leg, (bad face), (bad eyes), ((bad hands, bad feet, missing fingers, cropped:1.0)), worst quality, jpeg artifacts, (((watermark))), (username), blurry, wide face, ((fused fingers)), ((too many fingers)), amateur drawing, out of frame, (cloned face:1.3), (mutilated:1.3), (deformed:1.3), (gross proportions:1.3), (disfigured:1.3), (mutated hands:1.3), (bad hands:1.3), (extra fingers:1.3), long neck, extra limbs, broken limb, asymmetrical eyes, ((mutilated)), [out of frame], mutated hands, Photoshop, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, extra limbs, extra legs, extra arms, disfigured, deformed, cross-eye, body out of frame, blurry, bad anatomy,"
+            '''
+            
+            # manifest fantasy
+            
+            possitive_prompt_sufix = ", [(4k), anime wallpaper, (masterpiece), (highest quality), ((2d)), ultra detailed, (anime artwork), (best quality), (90s anime screencap:1.2), intricate details, adult, fantasy],"
+            
+            negative_prompt = "genitalia, japanese text, close up, canvas frame, cartoon, text, logo, (cgi), (3d render), (worst quality, low quality:1.4), blurry, multiple images, bad anatomy, bad proportions, ((3d)), kids, (lowres:1.1), (monochrome:1.1), ((black and white)), (greyscale), multiple views, cross-eye, sketch, (blurry:1.05), deformed eyes,  (((duplicate))), ((mutilated)), extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated arms, (((long neck))), melting faces, long neck, flat color, flat shading, (bad legs), one leg, extra leg, (bad face), (bad eyes), ((bad hands, bad feet, missing fingers, cropped:1.0)), worst quality, jpeg artifacts, (((watermark))), (username), blurry, wide face, ((fused fingers)), ((too many fingers)), amateur drawing, out of frame, (cloned face:1.3), (mutilated:1.3), (deformed:1.3), (gross proportions:1.3), (disfigured:1.3), (mutated hands:1.3), (bad hands:1.3), (extra fingers:1.3), long neck, extra limbs, broken limb, asymmetrical eyes, ((mutilated)), [out of frame], mutated hands, Photoshop, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, extra limbs, extra legs, extra arms, disfigured, deformed, cross-eye, body out of frame, blurry, bad anatomy,"
+            
             
             prompt = image_prompt + possitive_prompt_sufix
                 
@@ -264,15 +254,13 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
             
         except Exception as e:
             print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
-            time.sleep(60)
+            time.sleep(wait_time)
 
 
 async def create_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
     
     TEXT = story_fragment
-    # VOICE = "en-GB-SoniaNeural"
     VOICE = "en-GB-RyanNeural"
-    # VOICE =  "en-GB-ThomasNeural"
     OUTPUT_FILE = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3"
     communicate = edge_tts.Communicate(TEXT, VOICE)
     await communicate.save(OUTPUT_FILE)
@@ -353,7 +341,7 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
             keyphrase_ngram_range=(1, 3), 
             stop_words='english', 
             highlight=False,
-            top_n=3
+            top_n=2
         )
         keywords_list = list(dict(keywords).keys())
         
@@ -395,10 +383,11 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
     final_video = final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4")
     print(f"{showTime()} Final video created successfully!")
 
+    
 
 if __name__ == "__main__":
 
-    # prepare StableDiffusionPipeline start
+    # vvvvvvvvv prepare StableDiffusionPipeline 
     # clear cuda cache
     with torch.no_grad():
         torch.cuda.empty_cache()
@@ -431,8 +420,8 @@ if __name__ == "__main__":
     # uncomment to disable NSFW filter
     def dummy_checker(images, **kwargs): return images, False
     pipe.safety_checker = dummy_checker 
-    # prepare StableDiffusionPipeline end
-    
+    # ^^^^^^^^ prepare StableDiffusionPipeline 
+
 
     print(f"{showTime()}")
     # Get current working directory
@@ -466,8 +455,6 @@ if __name__ == "__main__":
             
             # group sentences into story fragments of a given length
             number_of_story_fragments = sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH)
-            
-            # convert each story fragment into prompt and use it to generate image
             
             image_prompts = []
             
@@ -511,7 +498,7 @@ if __name__ == "__main__":
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
                     # generate image form prompt 
                     prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJECT_DIR)
-                
+                    
                 if(Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
                     # create video clip using story fragment and generated image
                     # create a new process
@@ -519,9 +506,6 @@ if __name__ == "__main__":
                     process = Process(target = createVideoClip, args = (i, CURRENT_PROJECT_DIR))
                     # start the new process
                     process.start()
-                
-                # if DEBUG:
-                    # pause()
  
             if(using_video_fragments_Processes):
                 # wait for the new process to finish
@@ -530,24 +514,18 @@ if __name__ == "__main__":
                 process.join()
                 # continue on
                 print('Main: video_fragments joined, continuing on')
-
-            # set video fragments status as done
-            #with open('video_fragments_done', 'w') as fp:
-            #    fp.close()
             
             if(Path(CURRENT_PROJECT_DIR+'/'+project_name+".mp4").is_file() == False):
-                # final_video_thread = Thread(target=makeFinalVideo, args=[project_name, CURRENT_PROJECT_DIR])
-                # start the new thread
-                # final_video_thread.start()
-                
+                # create final video
                 final_video_process = Process(target = makeFinalVideo, args = (project_name, CURRENT_PROJECT_DIR))
                 final_video_process.start()
-            
 
         
    
    
 '''
+# voices for edge-tts:
+
 Name: en-AU-NatashaNeural
 Gender: Female
 
