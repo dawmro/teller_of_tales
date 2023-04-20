@@ -477,6 +477,20 @@ if __name__ == "__main__":
             for i in range(number_of_story_fragments):
                 print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
                 
+                # vvvvvv significant speedup, but needs fast CPU and more than 32GB of RAM 
+                # generate prompts in advance if using keyBERT
+                if(USE_CHATGPT == False):
+                    # stay ahead of current iteration by this many steps 
+                    steps_to_stay_ahead = 10
+                    j = i + steps_to_stay_ahead
+                    if(j < number_of_story_fragments):
+                        if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{j}.txt").is_file() == False):
+                            # translate fragment into prompt
+                            print(f"{showTime()} {j} of {number_of_story_fragments-1} preparing prompts in advance")
+                            test_thread = Process(target=fragment_toPrompt, args=(j, CURRENT_PROJECT_DIR))
+                            test_thread.start()
+                # ^^^^^^ significant speedup, but needs fast CPU and more than 32GB of RAM 
+                
                 # create voiceover using edge_tts
                 if(Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3").is_file() == False):
                     story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
