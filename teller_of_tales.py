@@ -471,7 +471,7 @@ if __name__ == "__main__":
             
             image_prompts = []
             
-            using_video_fragments_Threads = False
+            using_video_fragments_Processes = False
   
             # for each story fragment
             for i in range(number_of_story_fragments):
@@ -500,20 +500,20 @@ if __name__ == "__main__":
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
                     # create video clip using story fragment and generated image
-                    # create a new thread
-                    using_video_fragments_Threads = True
-                    thread = Thread(target=createVideoClip, args=[i, CURRENT_PROJECT_DIR])
-                    # start the new thread
-                    thread.start()
+                    # create a new process
+                    using_video_fragments_Processes = True
+                    process = Process(target = createVideoClip, args = (i, CURRENT_PROJECT_DIR))
+                    # start the new process
+                    process.start()
                 
                 # if DEBUG:
                     # pause()
  
-            if(using_video_fragments_Threads):
-                # wait for the new thread to finish
-                print('Main: Waiting for video_fragments thread to terminate...')
+            if(using_video_fragments_Processes):
+                # wait for the new process to finish
+                print('Main: Waiting for video_fragments process to terminate...')
                 # block until all tasks are done
-                thread.join()
+                process.join()
                 # continue on
                 print('Main: video_fragments joined, continuing on')
 
