@@ -2,7 +2,7 @@
 
 ## Features:
 * Create narrated video story from book chapter using NLP, OpenAI and StableDiffusion.
-* Using keyBERT instead of ChatGPT as a free option is available. 
+* You can use keyBERT instead of ChatGPT as a free option. 
 * You can run multiple projects at once to create multiple narrated videos. 
 * Video creation process is automatic and unsupervised, results may vary.
 Example: https://youtu.be/fz-Ez8PsE5A
@@ -13,12 +13,12 @@ Example: https://youtu.be/fz-Ez8PsE5A
 1. User places chapter of a book into 'story.txt' file in 'projects/my_project_name' directory.
 2. User starts program with 'python .\teller_of_tales.py' command.
 3. User goes away to do his own things.
-4. Text in chapter is being split into separate sentences.
-5. Sentences are being combined into fragments of appropriate length.
+4. Text in chapter is split into separate sentences.
+5. Sentences are combined into fragments of appropriate length.
 6. Each text fragment is converted to audio file using text to speach.
-7. For each fragment prompts are being created using ChatGPT or KeyBERT. Prompts describe situation that 'can be seen' in a given fragment.
-8. Using StableDiffusion image is being created that is based on prompts created earlier.
-9. Using MoviePy audio and image files are transformed into video file of current scene.
+7. For each fragment, prompts are created using ChatGPT or KeyBERT. Prompts describe situation that 'can be seen' in a given fragment.
+8. Using StableDiffusion and prompts from point 7. image is created.
+9. Audio and image files are transformed into video file of current scene using MoviePy.
 10. Video files of separate scenes are concatenated into final video file.
 11. User comes back and watches final video file.
 
