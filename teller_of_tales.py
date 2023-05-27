@@ -243,10 +243,12 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
             
             negative_prompt = "genitalia, japanese text, close up, canvas frame, cartoon, text, logo, (cgi), (3d render), (worst quality, low quality:1.4), blurry, multiple images, bad anatomy, bad proportions, ((3d)), kids, (lowres:1.1), (monochrome:1.1), ((black and white)), (greyscale), multiple views, cross-eye, sketch, (blurry:1.05), deformed eyes,  (((duplicate))), ((mutilated)), extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated arms, (((long neck))), melting faces, long neck, flat color, flat shading, (bad legs), one leg, extra leg, (bad face), (bad eyes), ((bad hands, bad feet, missing fingers, cropped:1.0)), worst quality, jpeg artifacts, (((watermark))), (username), blurry, wide face, ((fused fingers)), ((too many fingers)), amateur drawing, out of frame, (cloned face:1.3), (mutilated:1.3), (deformed:1.3), (gross proportions:1.3), (disfigured:1.3), (mutated hands:1.3), (bad hands:1.3), (extra fingers:1.3), long neck, extra limbs, broken limb, asymmetrical eyes, ((mutilated)), [out of frame], mutated hands, Photoshop, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, extra limbs, extra legs, extra arms, disfigured, deformed, cross-eye, body out of frame, blurry, bad anatomy,"
             
+            # scale number of steps with image size to prevent large grainy images
+            steps = int(((15 * image_height * image_width) / 407040) + 1) 
             
             prompt = image_prompt + possitive_prompt_sufix
                 
-            image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=10).images[0]
+            image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=steps).images[0]
 
             image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")
             
