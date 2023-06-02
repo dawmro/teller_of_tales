@@ -31,39 +31,43 @@ from multiprocessing import Process
 # for extracting keywords
 from keybert import KeyBERT
 
+import pathlib
+import configparser
 
-# set to True if you want to generate image prompts with ChatGPT (costs money)
-# set to False if you want to extract keywords using KeyBERT (is free)
-USE_CHATGPT = False
+config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
+config = configparser.ConfigParser()
+config.read(config_path)
 
-if USE_CHATGPT == True:
+DEBUG = config["GENERAL"]["DEBUG"]
+SPEED_UP = config["GENERAL"]["SPEED_UP"]
+FRAGMENT_LENGTH = int(config["TEXT_FRAGMENT"]["FRAGMENT_LENGTH"])
+
+VOICE = config["AUDIO"]["VOICE"]
+
+USE_CHATGPT = config["IMAGE_PROMPT"]["USE_CHATGPT"]
+model_engine = config["IMAGE_PROMPT"]["model_engine"]
+
+NSFW_filter = config["STABLE_DIFFUSION"]["NSFW_filter"]
+lowmem = config["STABLE_DIFFUSION"]["lowmem"]
+seed = int(config["STABLE_DIFFUSION"]["seed"])
+image_width = int(config["STABLE_DIFFUSION"]["image_width"])
+image_height = int(config["STABLE_DIFFUSION"]["image_height"])
+model_id = config["STABLE_DIFFUSION"]["model_id"]
+possitive_prompt_sufix = config["STABLE_DIFFUSION"]["possitive_prompt_sufix"]
+negative_prompt = config["STABLE_DIFFUSION"]["negative_prompt"]
+
+
+if USE_CHATGPT == 'yes':
     # Use API_KEY imported from environment variables
     openai.api_key = os.environ['OPENAI_TOKEN']
 
-# show step by step debug info?
-DEBUG = False
-
-# minimal amount of words to put in each story fragment
-FRAGMENT_LENGTH = 10
-
-# select model to use
-model_engine = "text-davinci-003"
-
-# set parameters for image
-lowmem = False
-seed = -1
-image_width = 848
-image_height = 480
- 
-
-
 
 def write_list(a_list, filename):
-    if DEBUG:
+    if DEBUG == 'yes':
         print("Started writing list data into a json file")
     with open(filename, "w") as fp:
         json.dump(a_list, fp)
-        if DEBUG:
+        if DEBUG == 'yes':
             print("Done writing JSON data into .json file")
 
 
@@ -75,11 +79,11 @@ def read_list(filename):
         
                 
 def write_file(file_content, filename):
-    if DEBUG:
+    if DEBUG == 'yes':
         print("Started writing file_content data into a file")
     with open(filename, "w", encoding='utf-8') as fp:
         fp.write(file_content)
-        if DEBUG:
+        if DEBUG == 'yes':
             print("Done file_content data into a file")
         
         
@@ -122,11 +126,14 @@ def load_and_split_to_sentences(filename):
         story_raw = file.read()
 
     # remove quotes from story
-    # wotw
-    #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('*', ' ').replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('_', '')
+    # gate wotw, ares game, america stranded
+    #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('*', ' ').replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('_', '').replace('.....', '').replace('....', '').replace('...', '')
     
-    # summoning america and wait is this just gate
+    # summoning america, wait is this just gate, age of memeoris
     story = story_raw.replace('“', '').replace('”', '').replace('—', ' ')
+    
+    # war of worlds wells
+    #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('*', ' ').replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('_', '').replace('.....', '').replace('....', '').replace('...', '').replace('\n', ' ').replace('      ', ' ')
 
     # split story into list of sentences
     story_sentences_list = sent_tokenize(story)
@@ -136,7 +143,7 @@ def load_and_split_to_sentences(filename):
     for i, story_sentence in enumerate(story_sentences_list):
         write_file(story_sentence, f"text/story_sentences/story_sentence{i}.txt")
     
-    if DEBUG:
+    if DEBUG == 'yes':
         # display story enumerating through each sentence
         for i, story_sentence in enumerate(story_sentences_list):
             print( i, story_sentence)
@@ -181,7 +188,7 @@ def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
         
         # if minimal length requirement is meet
         if current_fragment_word_counter > FRAGMENT_LENGTH:
-            if DEBUG:
+            if DEBUG == 'yes':
                 print(current_fragment_word_counter)
         
             # add current fragment to story fragments
@@ -200,7 +207,7 @@ def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
     for i, story_fragment in enumerate(story_fragments):
         write_file(story_fragment, f"text/story_fragments/story_fragment{i}.txt")
     
-    if DEBUG:
+    if DEBUG == 'yes':
         # display story enumerating through each sentence
         for i, story_fragment in enumerate(story_fragments):
             print( i, story_fragment)
@@ -222,26 +229,7 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
     while(do_it):
         try:
 
-            # summining america
-            '''
-            possitive_prompt_sufix = ", [High Detail, (highest quality), (realistic:1.3), (extremely detailed CG unity 8k wallpaper), intricate details, HDR, (masterpiece), (by midjourney), intricate:1.2, dramatic, fantasy]"
-         
-            negative_prompt = "genitalia, canvas frame, cartoon, 3d, ((disfigured)), ((bad art)), ((deformed)), ((extra limbs)), ((close up)), ((b&w)), wierd colors, blurry, (((duplicate))), ((morbid)), ((mutilated)), [out of frame], extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), ((ugly)), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), extra limbs, (bad anatomy), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), (fused fingers), (too many fingers), (((long neck))), Photoshop, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, disfigured, cross-eye, body out of frame, blurry, bad art, bad anatomy, 3d render"
-            '''
 
-            
-            # wotw
-            '''
-            possitive_prompt_sufix = ", [(4k), color hand drawn anime wallpaper, (masterpiece), (highest quality), ((2d)), ultra detailed anime artwork, (best quality), (90s anime screencap:1.2), intricate details, adult, fantasy],"
-            
-            negative_prompt = "genitalia, japanese text, close up, canvas frame, cartoon, text, logo, (cgi), (3d render), (worst quality, low quality:1.4), blurry, multiple images, bad anatomy, bad proportions, ((3d)), kids, (photorealistic), (lowres:1.1), (monochrome:1.1), ((black and white)), (greyscale), multiple views, cross-eye, sketch, (blurry:1.05), deformed eyes,  (((duplicate))), ((mutilated)), extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated arms, (((long neck))), melting faces, long neck, flat color, flat shading, (bad legs), one leg, extra leg, (bad face), (bad eyes), ((bad hands, bad feet, missing fingers, cropped:1.0)), worst quality, jpeg artifacts, (((watermark))), (username), blurry, wide face, ((fused fingers)), ((too many fingers)), amateur drawing, out of frame, (cloned face:1.3), (mutilated:1.3), (deformed:1.3), (gross proportions:1.3), (disfigured:1.3), (mutated hands:1.3), (bad hands:1.3), (extra fingers:1.3), long neck, extra limbs, broken limb, asymmetrical eyes, ((mutilated)), [out of frame], mutated hands, Photoshop, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, extra limbs, extra legs, extra arms, disfigured, deformed, cross-eye, body out of frame, blurry, bad anatomy,"
-            '''
-            
-            # manifest fantasy
-            
-            possitive_prompt_sufix = ", [(4k), anime wallpaper, (masterpiece), (highest quality), ((2d)), ultra detailed, (anime artwork), (best quality), (90s anime screencap:1.2), intricate details, adult, fantasy],"
-            
-            negative_prompt = "genitalia, japanese text, close up, canvas frame, cartoon, text, logo, (cgi), (3d render), (worst quality, low quality:1.4), blurry, multiple images, bad anatomy, bad proportions, ((3d)), kids, (lowres:1.1), (monochrome:1.1), ((black and white)), (greyscale), multiple views, cross-eye, sketch, (blurry:1.05), deformed eyes,  (((duplicate))), ((mutilated)), extra fingers, mutated hands, ((poorly drawn hands)), ((poorly drawn face)), (((mutation))), (((deformed))), blurry, ((bad anatomy)), (((bad proportions))), ((extra limbs)), cloned face, (((disfigured))), gross proportions, (malformed limbs), ((missing arms)), ((missing legs)), (((extra arms))), (((extra legs))), mutated arms, (((long neck))), melting faces, long neck, flat color, flat shading, (bad legs), one leg, extra leg, (bad face), (bad eyes), ((bad hands, bad feet, missing fingers, cropped:1.0)), worst quality, jpeg artifacts, (((watermark))), (username), blurry, wide face, ((fused fingers)), ((too many fingers)), amateur drawing, out of frame, (cloned face:1.3), (mutilated:1.3), (deformed:1.3), (gross proportions:1.3), (disfigured:1.3), (mutated hands:1.3), (bad hands:1.3), (extra fingers:1.3), long neck, extra limbs, broken limb, asymmetrical eyes, ((mutilated)), [out of frame], mutated hands, Photoshop, tiling, poorly drawn hands, poorly drawn feet, poorly drawn face, out of frame, mutation, mutated, extra limbs, extra legs, extra arms, disfigured, deformed, cross-eye, body out of frame, blurry, bad anatomy,"
             
             # scale number of steps with image size to prevent large grainy images
             steps = int(((15 * image_height * image_width) / 407040) + 1) 
@@ -262,8 +250,7 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
 async def create_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
     
     TEXT = story_fragment
-    VOICE = "en-GB-RyanNeural"
-    OUTPUT_FILE = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3"
+    OUTPUT_FILE = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav"
     communicate = edge_tts.Communicate(TEXT, VOICE)
     await communicate.save(OUTPUT_FILE)
     
@@ -273,7 +260,7 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
     story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
 
     # load the audio file using moviepy
-    audio_clip = AudioFileClip(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3")
+    audio_clip = AudioFileClip(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav")
     
     # add audio fadein / fadeout ot minimize sound glitches
     audio_clip = audio_clip.audio_fadein(0.05).audio_fadeout(0.05)
@@ -331,7 +318,7 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
     story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
     print(f"{i} Fragment: {story_fragment}")
     
-    if USE_CHATGPT == True:
+    if USE_CHATGPT == 'yes':
         prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
         # translate fragment into prompt
         image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
@@ -394,15 +381,11 @@ if __name__ == "__main__":
     with torch.no_grad():
         torch.cuda.empty_cache()
         
-    model_id = "darkstorm2150/Protogen_v2.2_Official_Release"
-    # model_id = "darkstorm2150/Protogen_Infinity_Official_Release"
-    # model_id = "Lykon/DreamShaper"
-    # model_id = "SG161222/Realistic_Vision_V2.0"
     pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
     
     # if limited by GPU memory (4GB VRAM):
-    if lowmem == True: 
+    if lowmem == 'yes': 
         # 1. do not move the pipeline to CUDA beforehand or else the gain in memory consumption will only be minimal
         # pipe = pipe.to("cuda")
         # 2. offload the weights to CPU and only load them to GPU when performing the forward pass
@@ -419,9 +402,9 @@ if __name__ == "__main__":
     else:
         generator = torch.Generator("cuda").manual_seed(seed)
         
-    # uncomment to disable NSFW filter
     def dummy_checker(images, **kwargs): return images, False
-    pipe.safety_checker = dummy_checker 
+    if NSFW_filter == 'no':
+        pipe.safety_checker = dummy_checker 
     # ^^^^^^^^ prepare StableDiffusionPipeline 
 
 
@@ -435,7 +418,10 @@ if __name__ == "__main__":
     
     # sort project directiories by name
     project_names = []
-    project_names_mixed.sort(key=lambda f: int(re.sub('\D', '', f)))
+    try:
+        project_names_mixed.sort(key=lambda f: int(re.sub('\D', '', f)))
+    except:
+        pass
     for project_name_mixed in project_names_mixed:
         project_names.append(project_name_mixed)
        
@@ -446,7 +432,7 @@ if __name__ == "__main__":
         print("Current working directory: {0}".format(os.getcwd())) 
         
         if(Path(f"{CURRENT_PROJECT_DIR}/{project_name}.mp4").is_file() == False):
-            if DEBUG:
+            if DEBUG == 'yes':
                 pause()
                 
             # Create directiories for text, audio, images and video files    
@@ -467,21 +453,22 @@ if __name__ == "__main__":
                 print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
                 
                 # vvvvvv significant speedup, but needs fast CPU and more than 32GB of RAM 
-                # generate prompts in advance if using keyBERT
-                if(USE_CHATGPT == False):
-                    # stay ahead of current iteration by this many steps 
-                    steps_to_stay_ahead = 10
-                    j = i + steps_to_stay_ahead
-                    if(j < number_of_story_fragments):
-                        if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{j}.txt").is_file() == False):
-                            # translate fragment into prompt
-                            print(f"{showTime()} {j} of {number_of_story_fragments-1} preparing prompts in advance")
-                            test_thread = Process(target=fragment_toPrompt, args=(j, CURRENT_PROJECT_DIR))
-                            test_thread.start()
+                if(SPEED_UP == 'yes'):
+                    # generate prompts in advance if using keyBERT
+                    if(USE_CHATGPT == 'no'):
+                        # stay ahead of current iteration by this many steps 
+                        steps_to_stay_ahead = 10
+                        j = i + steps_to_stay_ahead
+                        if(j < number_of_story_fragments):
+                            if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{j}.txt").is_file() == False):
+                                # translate fragment into prompt
+                                print(f"{showTime()} {j} of {number_of_story_fragments-1} preparing prompts in advance")
+                                test_thread = Process(target=fragment_toPrompt, args=(j, CURRENT_PROJECT_DIR))
+                                test_thread.start()
                 # ^^^^^^ significant speedup, but needs fast CPU and more than 32GB of RAM 
                 
                 # create voiceover using edge_tts
-                if(Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3").is_file() == False):
+                if(Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav").is_file() == False):
                     story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
                     do_it = True
                     while(do_it):
@@ -636,6 +623,7 @@ Gender: Female
 Name: en-US-RogerNeural
 Gender: Male
 
+# good one
 Name: en-US-SteffanNeural
 Gender: Male
 
