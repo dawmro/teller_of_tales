@@ -34,7 +34,13 @@ from keybert import KeyBERT
 import pathlib
 import configparser
 
+from moviepy.editor import (VideoFileClip, AudioFileClip, CompositeAudioClip)
+from moviepy.audio.fx.all import volumex
+from PIL import Image
+
 config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
+bg_music_path = pathlib.Path(__file__).parent.absolute() / "bg_music/bg_music2.mp3"
+
 config = configparser.ConfigParser()
 config.read(config_path)
 
@@ -43,6 +49,7 @@ SPEED_UP = config["GENERAL"]["SPEED_UP"]
 FRAGMENT_LENGTH = int(config["TEXT_FRAGMENT"]["FRAGMENT_LENGTH"])
 
 VOICE = config["AUDIO"]["VOICE"]
+BG_MUSIC = config["AUDIO"]["BG_MUSIC"]
 
 USE_CHATGPT = config["IMAGE_PROMPT"]["USE_CHATGPT"]
 model_engine = config["IMAGE_PROMPT"]["model_engine"]
@@ -369,7 +376,20 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
     # combine all clips into final video
     print(f"{showTime()} Concatenate all clips into final video...")
     final_video = concatenate_videoclips(clips, padding=-1, method="compose")
-    final_video = final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4")
+    
+    # add backgroud music to video
+    if BG_MUSIC == "yes":
+        video_clip = final_video
+        original_audio = video_clip.audio
+        soundtrack = AudioFileClip(str(bg_music_path))
+        bg_music = soundtrack.audio_loop(duration=video_clip.duration)
+        bg_music = bg_music.volumex(0.07)
+        final_audio = CompositeAudioClip([original_audio, bg_music])
+        final_clip = video_clip.set_audio(final_audio)
+        final_clip.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", codec='libx264', audio_codec="aac")
+    else:
+        final_video = final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", codec='libx264', audio_codec="aac")
+     
     print(f"{showTime()} Final video created successfully!")
 
     
