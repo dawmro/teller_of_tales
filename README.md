@@ -1,26 +1,26 @@
 # teller_of_tales
 
 ## Features:
-* Create narrated video story from book chapter using NLP, OpenAI and StableDiffusion.
-* You can use keyBERT instead of ChatGPT as a free option. 
-* You can run multiple projects at once to create multiple narrated videos. 
-* Video creation process is automatic and unsupervised, results may vary.
+* Create narrated video stories from book chapters using NLP, OpenAI and StableDiffusion.
+* You can use KeyBERT instead of ChatGPT as a free option. 
+* You can run multiple projects at once to create multiple narrated videos.
+* Video creation process is automatic and unsupervised; results may vary.
 Example: https://youtu.be/fz-Ez8PsE5A
 
 ![alt text](https://github.com/dawmro/teller_of_tales/blob/main/screenshot.png?raw=true)
 
-## How does it work (simplified workflow):
-1. User places chapter of a book into 'story.txt' file in 'projects/my_project_name' directory.
-2. User starts program with 'python .\teller_of_tales.py' command.
-3. User goes away to do his own things.
-4. Text in chapter is split into separate sentences.
+## How does it work:
+1. User places a chapter of a book into the ‘story.txt’ file in the ‘projects/my_project_name’ directory.
+2. User starts the program with the ‘python .\teller_of_tales.py’ command.
+3. User goes away to do something else.
+4. Text in the chapter is split into separate sentences.
 5. Sentences are combined into fragments of appropriate length.
-6. Each text fragment is converted to audio file using text to speach.
-7. For each fragment, prompts are created using ChatGPT or KeyBERT. Prompts describe situation that 'can be seen' in a given fragment.
-8. Using StableDiffusion and prompts from point 7. image is created.
-9. Audio and image files are transformed into video file of current scene using MoviePy.
-10. Video files of separate scenes are concatenated into final video file.
-11. User comes back and watches final video file.
+6. Each text fragment is converted to an audio file using text to speech.
+7. For each fragment, prompts are created using ChatGPT or KeyBERT. Prompts describe the situation that 'can be seen' in a given fragment.
+8. Using StableDiffusion and prompts from point 7, image is created.
+9. Audio and image files are transformed into a video file of the current scene using MoviePy.
+10. Video files of separate scenes are concatenated into the final video file.
+11. User comes back and watches the final video file.
 
 ## Prerequisites:
 1. Python 3.8.10
@@ -67,10 +67,10 @@ huggingface-cli login
 
 
 ## Usage:
-1. Create folder in 'projects' directory. Folder name will become final video name.
-2. Paste your story into story.txt file inside created folder.
+1. Create a folder in the ‘projects’ directory. The folder name will become the final video name.
+2. Paste your story into the story.txt file inside the created folder.
 3. Create multiple folders and paste multiple stories if you want to run multiple projects at once.
-4. Run python script:
+4. Run the python script:
 ``` sh
 python .\teller_of_tales.py
 ```
