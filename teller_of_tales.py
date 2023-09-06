@@ -503,6 +503,10 @@ if __name__ == "__main__":
                 if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt").is_file() == False):
                     # translate fragment into prompt
                     fragment_toPrompt(i, CURRENT_PROJECT_DIR)
+
+                if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == True) and (Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
+                    # In case all images are ready, but none of videos are, video clip creation process will start all clips at once, eat all RAM and crash system. Add few seconds of delay between steps to prevent this. 
+                    time.sleep(6)
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
                     # generate image form prompt 
