@@ -1,11 +1,14 @@
 # teller_of_tales
 
+Teller of Tales is a project that creates narrated video stories from book chapters using natural language processing (NLP), OpenAI, and StableDiffusion. It can run multiple projects at once and generate videos automatically and unsupervised. The results may vary depending on the input text and the chosen options.
+
 ## Features:
-* Create narrated video stories from book chapters using NLP, OpenAI and StableDiffusion.
-* You can use KeyBERT instead of ChatGPT as a free option. 
-* You can run multiple projects at once to create multiple narrated videos.
-* Video creation process is automatic and unsupervised; results may vary.
-Example: https://youtu.be/fz-Ez8PsE5A
+* NLP with OpenAI or KeyBERT
+* Image generation with StableDiffusion
+* Text to speech with Google Cloud Text-to-Speech
+* Video editing with MoviePy
+
+Here is an example of a video story created by Teller of Tales: https://youtu.be/fz-Ez8PsE5A
 
 ![alt text](https://github.com/dawmro/teller_of_tales/blob/main/screenshot.png?raw=true)
 
@@ -55,9 +58,9 @@ Add both check boxes:
 ``` sh
 setx OPENAI_TOKEN=your_token
 ```
-6a. Don't want to use OpenAI account? No problem! Make sure that USE_CHATGPT in line 37 is set to False:
+6a. Don't want to use OpenAI account? No problem! Make sure that USE_CHATGPT in config.ini is set to no:
 ``` sh
-USE_CHATGPT = False
+USE_CHATGPT = no
 ```
 7. Login to HugginFace using your Access Token from https://huggingface.co/settings/tokens:
 ``` sh
@@ -74,3 +77,4 @@ huggingface-cli login
 ``` sh
 python .\teller_of_tales.py
 ```
+5. Wait for the script to finish and check the folder with profect for the output video.
