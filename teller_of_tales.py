@@ -36,7 +36,12 @@ import configparser
 
 from moviepy.editor import (VideoFileClip, AudioFileClip, CompositeAudioClip)
 from moviepy.audio.fx.all import volumex
-from PIL import Image
+
+import requests
+import io
+import base64
+from PIL import Image, PngImagePlugin
+
 
 config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
 bg_music_path = pathlib.Path(__file__).parent.absolute() / "bg_music/bg_music2.mp3"
@@ -60,8 +65,11 @@ seed = int(config["STABLE_DIFFUSION"]["seed"])
 image_width = int(config["STABLE_DIFFUSION"]["image_width"])
 image_height = int(config["STABLE_DIFFUSION"]["image_height"])
 model_id = config["STABLE_DIFFUSION"]["model_id"]
+possitive_prompt_prefix = config["STABLE_DIFFUSION"]["possitive_prompt_prefix"]
 possitive_prompt_sufix = config["STABLE_DIFFUSION"]["possitive_prompt_sufix"]
 negative_prompt = config["STABLE_DIFFUSION"]["negative_prompt"]
+
+USE_SD_VIA_API = config["STABLE_DIFFUSION"]["USE_SD_VIA_API"]
 
 
 if USE_CHATGPT == 'yes':
@@ -136,8 +144,11 @@ def load_and_split_to_sentences(filename):
     # gate wotw, ares game, america stranded
     #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('*', ' ').replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('_', '').replace('.....', '').replace('....', '').replace('...', '')
     
-    # summoning america, wait is this just gate, age of memeoris
-    story = story_raw.replace('“', '').replace('”', '').replace('—', ' ')
+    # summoning america, wait is this just gate, age of memeoris, america in another world
+    story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ')
+    
+    # lucius
+    #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ').replace(':', '.').replace(';', '.')
     
     # war of worlds wells
     #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('*', ' ').replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('_', '').replace('.....', '').replace('....', '').replace('...', '').replace('\n', ' ').replace('      ', ' ')
@@ -235,18 +246,51 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
     print(i, image_prompt)
     while(do_it):
         try:
-
-
-            
-            # scale number of steps with image size to prevent large grainy images
-            steps = int(((15 * image_height * image_width) / 407040) + 1) 
-            
-            prompt = image_prompt + possitive_prompt_sufix
+            if USE_SD_VIA_API == 'no':
+                if lowmem == "yes":
+                    # restart StableDiffusionPipeline
+                    pipe, generator = prepare_pipeline()
                 
-            image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=steps).images[0]
+                # scale number of steps with image size to prevent large grainy images
+                steps = int(min(((20 * image_height * image_width) / 407040) + 1, 50)) 
+                
+                prompt = possitive_prompt_prefix + image_prompt + possitive_prompt_sufix
+                    
+                image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=steps).images[0]
 
-            image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")
+                image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")  
             
+            else:
+                url = "http://127.0.0.1:7860"
+
+                payload = {
+                    "prompt": f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}",
+                    "negative_prompt": f"{negative_prompt}",
+                    "steps": 20,
+                    "width": image_width,
+                    "height": image_height,
+                    "seed": -1,
+                    "guidance_scale": "7.0",
+                    "sampler": "DPM++ 2M Karras",
+                    "sd_model_checkpoint": "dreamshaperXL10_alpha2Xl10.safetensors [0f1b80cfe8]",
+                    "sd_vae": "sdxl_vae.safetensors",
+                }
+                response = requests.post(url=f'{url}/sdapi/v1/txt2img', json=payload)
+
+                r = response.json()
+                
+                for j in r['images']:
+                    image = Image.open(io.BytesIO(base64.b64decode(j.split(",",1)[0])))
+
+                    png_payload = {
+                        "image": "data:image/png;base64," + j
+                    }
+                    response2 = requests.post(url=f'{url}/sdapi/v1/png-info', json=png_payload)
+
+                    pnginfo = PngImagePlugin.PngInfo()
+                    pnginfo.add_text("parameters", response2.json().get("info"))
+                    image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg", pnginfo=pnginfo)
+                    
             do_it = False
             
         except Exception as e:
@@ -383,7 +427,7 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
         original_audio = video_clip.audio
         soundtrack = AudioFileClip(str(bg_music_path))
         bg_music = soundtrack.audio_loop(duration=video_clip.duration)
-        bg_music = bg_music.volumex(0.07)
+        bg_music = bg_music.volumex(0.04)
         final_audio = CompositeAudioClip([original_audio, bg_music])
         final_clip = video_clip.set_audio(final_audio)
         final_clip.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", codec='libx264', audio_codec="aac")
@@ -393,9 +437,7 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
     print(f"{showTime()} Final video created successfully!")
 
     
-
-if __name__ == "__main__":
-
+def prepare_pipeline():
     # vvvvvvvvv prepare StableDiffusionPipeline 
     # clear cuda cache
     with torch.no_grad():
@@ -425,9 +467,19 @@ if __name__ == "__main__":
     def dummy_checker(images, **kwargs): return images, False
     if NSFW_filter == 'no':
         pipe.safety_checker = dummy_checker 
+   
+    return pipe, generator
     # ^^^^^^^^ prepare StableDiffusionPipeline 
+    
 
-
+if __name__ == "__main__":
+    
+    if USE_SD_VIA_API == 'no':
+        # prepare StableDiffusionPipeline
+        pipe, generator = prepare_pipeline()
+    else:
+        pipe, generator = None, None
+    
     print(f"{showTime()}")
     # Get current working directory
     CWD = os.getcwd()
@@ -472,6 +524,10 @@ if __name__ == "__main__":
             for i in range(number_of_story_fragments):
                 print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
                 
+                # vvvvvv pause / unpause
+
+                # ^^^^^^ pause / unpause
+                
                 # vvvvvv significant speedup, but needs fast CPU and more than 32GB of RAM 
                 if(SPEED_UP == 'yes'):
                     # generate prompts in advance if using keyBERT
@@ -503,13 +559,9 @@ if __name__ == "__main__":
                 if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt").is_file() == False):
                     # translate fragment into prompt
                     fragment_toPrompt(i, CURRENT_PROJECT_DIR)
-
-                if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == True) and (Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
-                    # In case all images are ready, but none of videos are, video clip creation process will start all clips at once, eat all RAM and crash system. Add few seconds of delay between steps to prevent this. 
-                    time.sleep(6)
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
-                    # generate image form prompt 
+                    # generate image form prompt
                     prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJECT_DIR)
                     
                 if(Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
