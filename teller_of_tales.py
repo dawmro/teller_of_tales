@@ -42,6 +42,8 @@ import io
 import base64
 from PIL import Image, PngImagePlugin
 
+import psutil
+
 
 config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
 bg_music_path = pathlib.Path(__file__).parent.absolute() / "bg_music/bg_music2.mp3"
@@ -561,8 +563,11 @@ if __name__ == "__main__":
                     fragment_toPrompt(i, CURRENT_PROJECT_DIR)
 
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == True) and (Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
-                    # In case all images are ready, but none of videos are, video clip creation process will start all clips at once, eat all RAM and crash system. Add few seconds of delay between steps to prevent this. 
-                    time.sleep(8)
+                    # if cpu usage is more than 90%, wait for current loop to end (tweak this value based on your needs)
+                    if (int(psutil.cpu_percent(1)) > 90):
+                        # In case all images are ready, but none of videos are, video clip creation process will start all clips at once, eat all RAM and crash system. Add few seconds of delay between steps to prevent this. 
+                        print('Main: High cpu usage -> Waiting for a few seconds before starting next loop...')
+                        time.sleep(10)
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
                     # generate image form prompt
