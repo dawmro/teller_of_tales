@@ -325,8 +325,24 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
     # get audio duration
     audio_duration = audio_clip.duration
     
-    # load the image file using moviepy
-    image_clip = ImageClip(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").set_duration(audio_duration)
+    # use short video clips instead of images (making final video trully animated)
+    # example: animate generated image_x.jpg files using pikalabs and save them in images
+    # directory as movie_x.mp4 files
+    if(Path(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").is_file() == True):
+        movie_clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").loop(duration = audio_duration)
+        
+    elif(Path(f"{CURRENT_PROJECT_DIR}/images/movie{i}.mp4").is_file() == True):
+        # load movie fragment file using moviepy
+        movie_clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/images/movie{i}.mp4")
+        reversed_movie_clip = movie_clip.fx(vfx.time_mirror)
+        mirrored_movie_clip = concatenate_videoclips([movie_clip, reversed_movie_clip], padding=-0.2, method="compose")
+        movie_clip = mirrored_movie_clip.resize( (image_width, image_height) )
+        movie_clip.write_videofile(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4", fps=24)
+        movie_clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").loop(duration = audio_duration)
+
+    else:
+        # load the image file using moviepy
+        image_clip = ImageClip(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").set_duration(audio_duration)
     
     # use moviepy to create a text clip from the text
     screensize = (image_width, image_height)
@@ -334,11 +350,14 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
     text_clip = text_clip.set_duration(audio_duration)
     
     # concatenate the audio, image, and text clips
-    clip = image_clip.set_audio(audio_clip)
+    if(Path(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").is_file() == True):
+        clip = movie_clip.set_audio(audio_clip)
+    else:
+        clip = image_clip.set_audio(audio_clip)
     video = CompositeVideoClip([clip, text_clip])
     
     # save Video Clip to a file
-    video = video.write_videofile(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4", fps=24)
+    video_mp4 = video.write_videofile(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4", fps=24)
     print(f"{showTime()} The Video{i} Has Been Created Successfully!")
         
     
