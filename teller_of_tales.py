@@ -36,6 +36,7 @@ import configparser
 
 from moviepy.editor import (VideoFileClip, AudioFileClip, CompositeAudioClip)
 from moviepy.audio.fx.all import volumex
+import moviepy.video.fx.all as vfx
 
 import requests
 import io
@@ -144,10 +145,10 @@ def load_and_split_to_sentences(filename):
 
     # remove quotes from story
     # gate wotw, ares game, america stranded
-    #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('*', ' ').replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('_', '').replace('.....', '').replace('....', '').replace('...', '')
+    story = story_raw.replace('“', '').replace('”', '').replace('-', ' ').replace('—', ' ').replace('*', ' ').replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('_', '').replace('.....', '').replace('....', '').replace('...', ', ').replace('~', ' ').replace('*', ' ')#.replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ').replace('\n\n', '\n')
     
     # summoning america, wait is this just gate, age of memeoris, america in another world
-    story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ')
+    #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ')
     
     # lucius
     #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ').replace(':', '.').replace(';', '.')
@@ -273,7 +274,7 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
                     "height": image_height,
                     "seed": -1,
                     "guidance_scale": "7.0",
-                    "sampler": "DPM++ 2M Karras",
+                    "sampler": "DPM++ 2S a Karras",
                     "sd_model_checkpoint": "dreamshaperXL10_alpha2Xl10.safetensors [0f1b80cfe8]",
                     "sd_vae": "sdxl_vae.safetensors",
                 }
@@ -454,9 +455,9 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
         bg_music = bg_music.volumex(0.04)
         final_audio = CompositeAudioClip([original_audio, bg_music])
         final_clip = video_clip.set_audio(final_audio)
-        final_clip.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", codec='libx264', audio_codec="aac")
+        final_clip.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=24)
     else:
-        final_video = final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", codec='libx264', audio_codec="aac")
+        final_video = final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=24)
      
     print(f"{showTime()} Final video created successfully!")
 
@@ -583,7 +584,7 @@ if __name__ == "__main__":
                 if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt").is_file() == False):
                     # translate fragment into prompt
                     fragment_toPrompt(i, CURRENT_PROJECT_DIR)
-
+                    
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == True) and (Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
                     # if cpu usage is more than 90%, wait for current loop to end (tweak this value based on your needs)
                     if (int(psutil.cpu_percent(1)) > 90):
