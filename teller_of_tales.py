@@ -377,10 +377,13 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
         image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
         
     else:
+        ngram_range = (1, 3)
+        if USE_SD_VIA_API == 'yes':
+            ngram_range = (1, 6)
         kw_model = KeyBERT(model='all-mpnet-base-v2')
         keywords = kw_model.extract_keywords(
-            story_fragment, 
-            keyphrase_ngram_range=(1, 3), 
+            story_fragment,
+            keyphrase_ngram_range=ngram_range, 
             stop_words='english', 
             highlight=False,
             top_n=2
