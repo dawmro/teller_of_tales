@@ -315,6 +315,15 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
 
     # load the audio file using moviepy
     audio_clip = AudioFileClip(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav")
+
+    # FIX:
+    # ffmepg incorrectly reporting the duration of the audio.
+    # This causes iter_chunks in AudioClip to try to read frames outside the length of the file.
+    # In FFMPEG_AudioReader get_frame reads the end of the file again, resulting in a glitch.
+    # Cut 0.05 from the end to remove glitch
+    # Note: using ffmpeg 6.0 instead of default 4.2.2 from imageio_ffmpeg could be possible fix,
+    # it also reduces metalic noise in audio.
+    audio_clip = audio_clip.subclip(0, audio_clip.duration - 0.05)
     
     # add audio fadein / fadeout ot minimize sound glitches
     audio_clip = audio_clip.audio_fadein(0.05).audio_fadeout(0.05)
