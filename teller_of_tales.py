@@ -259,7 +259,7 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
                 
                 prompt = possitive_prompt_prefix + image_prompt + possitive_prompt_sufix
                     
-                image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=7.5, generator=generator, num_inference_steps=steps).images[0]
+                image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=6.0, generator=generator, num_inference_steps=steps).images[0]
 
                 image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")  
             
