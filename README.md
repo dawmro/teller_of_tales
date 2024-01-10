@@ -19,7 +19,7 @@ Here is an example of a video story created by Teller of Tales: https://youtu.be
 4. Text in the chapter is split into separate sentences.
 5. Sentences are combined into fragments of appropriate length.
 6. Each text fragment is converted to an audio file using text to speech.
-7. For each fragment, prompts are created using ChatGPT or KeyBERT. Prompts describe the situation that 'can be seen' in a given fragment.
+7. Prompts for StableDiffusion are created using ChatGPT or KeyBERT. Prompts describe the situation that 'can be seen' in a given text fragment.
 8. Using StableDiffusion and prompts from point 7, image is created.
 9. Audio and image files are transformed into a video file of the current scene using MoviePy.
 10. Video files of separate scenes are concatenated into the final video file.
