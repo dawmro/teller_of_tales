@@ -269,15 +269,26 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
                 payload = {
                     "prompt": f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}",
                     "negative_prompt": f"{negative_prompt}",
-                    "steps": 20,
+                    #"steps": 8,
+                    "steps": 12,
                     "width": image_width,
                     "height": image_height,
                     "seed": -1,
-                    "guidance_scale": "7.0",
-                    "sampler": "DPM++ 2S a Karras",
-                    "sd_model_checkpoint": "dreamshaperXL10_alpha2Xl10.safetensors [0f1b80cfe8]",
+                    #"guidance_scale": "2.0",
+                    "guidance_scale": "4.0",
+                    #"sampler_index": "DPM++ SDE Karras",
+                    "sampler_index": "DPM++ 2M Karras",
+                    
+                }
+                
+                option_payload = {
+                    #"sd_model_checkpoint": "dreamshaperXL_v21TurboDPMSDE.safetensors [4496b36d48]",
+                    #"sd_model_checkpoint": "dreamshaperXL10_alpha2Xl10.safetensors [0f1b80cfe8]",
+                    "sd_model_checkpoint": "animeArtDiffusionXL_alpha3.safetensors",
                     "sd_vae": "sdxl_vae.safetensors",
                 }
+                
+                requests.post(url="http://127.0.0.1:7860/sdapi/v1/options", json=option_payload)
                 response = requests.post(url=f'{url}/sdapi/v1/txt2img', json=payload)
 
                 r = response.json()
