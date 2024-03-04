@@ -636,13 +636,18 @@ if __name__ == "__main__":
                 # create final video
                 final_video_process = Process(target = makeFinalVideo, args = (project_name, CURRENT_PROJECT_DIR))
                 final_video_process.start()
-                time.sleep(30)
-                # if free virtual memory is less than 100GB, wait for final_video_process to end (tweak this value based on your needs)
-                if (int(psutil.swap_memory()[2]/1000000000) < 100):
-                    # block until all tasks are done
-                    print('Main: High vmem usage -> Waiting for final_video_process process to terminate...')
-                    final_video_process.join()
-                    print('Main: final_video_process joined, continuing on')
+                time.sleep(240)
+                #vvv
+                # if free virtual memory is less than 300GB, then wait (tweak this value based on your needs)
+                free_swap = int(psutil.swap_memory()[2]/1000000000)
+                while (free_swap < 300):
+                    print(f"{showTime()} Main: High vmem usage! Free swap: {free_swap} -> Waiting...")
+                    time.sleep(300)
+                    free_swap = int(psutil.swap_memory()[2]/1000000000)
+                #^^^
+                # block until all tasks are done    
+                #final_video_process.join()
+                #print('Main: final_video_process joined, continuing on')
 
         
    
