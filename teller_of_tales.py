@@ -570,7 +570,10 @@ if __name__ == "__main__":
                 print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
                 
                 # vvvvvv pause / unpause
-
+                # if cpu usage is more than 90%, wait (tweak this value based on your needs)
+                while (int(psutil.cpu_percent(interval=None)) > 90):
+                    print(f"{showTime()} Main: High CPU usage! -> Waiting...")
+                    time.sleep(5)
                 # ^^^^^^ pause / unpause
                 
                 # vvvvvv significant speedup, but needs fast CPU and more than 32GB of RAM 
@@ -606,11 +609,8 @@ if __name__ == "__main__":
                     fragment_toPrompt(i, CURRENT_PROJECT_DIR)
                     
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == True) and (Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
-                    # if cpu usage is more than 90%, wait for current loop to end (tweak this value based on your needs)
-                    if (int(psutil.cpu_percent(1)) > 90):
-                        # In case all images are ready, but none of videos are, video clip creation process will start all clips at once, eat all RAM and crash system. Add few seconds of delay between steps to prevent this. 
-                        print('Main: High cpu usage -> Waiting for a few seconds before starting next loop...')
-                        time.sleep(10)
+                    # do not start all image to video conversions at once
+                    time.sleep(3)
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
                     # generate image form prompt
