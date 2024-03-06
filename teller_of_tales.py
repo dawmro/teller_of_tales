@@ -54,8 +54,11 @@ config.read(config_path)
 
 DEBUG = config["GENERAL"]["DEBUG"]
 SPEED_UP = config["GENERAL"]["SPEED_UP"]
+FREE_SWAP = int(config["GENERAL"]["FREE_SWAP"])
+
 FRAGMENT_LENGTH = int(config["TEXT_FRAGMENT"]["FRAGMENT_LENGTH"])
 
+USE_ELEVENLABS = config["AUDIO"]["USE_ELEVENLABS"]
 VOICE = config["AUDIO"]["VOICE"]
 BG_MUSIC = config["AUDIO"]["BG_MUSIC"]
 
@@ -75,9 +78,14 @@ negative_prompt = config["STABLE_DIFFUSION"]["negative_prompt"]
 USE_SD_VIA_API = config["STABLE_DIFFUSION"]["USE_SD_VIA_API"]
 
 
+if USE_ELEVENLABS == 'yes':
+    # Use ELEVENLABS_API_KEY imported from environment variables
+    ELEVENLABS_API_KEY = os.environ['ELEVENLABS_API_KEY']
+
 if USE_CHATGPT == 'yes':
     # Use API_KEY imported from environment variables
     openai.api_key = os.environ['OPENAI_TOKEN']
+    
 
 
 def write_list(a_list, filename):
@@ -145,7 +153,7 @@ def load_and_split_to_sentences(filename):
 
     # remove quotes from story
     # gate wotw, ares game, america stranded
-    story = story_raw.replace('“', '').replace('”', '').replace('-', ' ').replace('—', ' ').replace('*', ' ').replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('_', '').replace('.....', '').replace('....', '').replace('...', ', ').replace('~', ' ').replace('*', ' ')#.replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ').replace('\n\n', '\n')
+    story = story_raw.replace('#', '.').replace('.."', '."').replace('“', '').replace('”', '').replace('-', ' ').replace('–', ' ').replace('—', ' ').replace('*', ' ').replace('_', '').replace('.....', '').replace('....', '').replace('...', ', ').replace('~', ',').replace('*', ',').replace('\n\n\n', '\n').replace('\n\n', '\n').replace('XXXXXX', ' ').replace('XXXXXX', ' ')#.replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ')
     
     # summoning america, wait is this just gate, age of memeoris, america in another world
     #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ')
@@ -269,22 +277,27 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
                 payload = {
                     "prompt": f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}",
                     "negative_prompt": f"{negative_prompt}",
-                    #"steps": 8,
-                    "steps": 12,
+                    "steps": 8,
+                    #"steps": 12,
                     "width": image_width,
                     "height": image_height,
                     "seed": -1,
                     #"guidance_scale": "2.0",
                     "guidance_scale": "4.0",
                     #"sampler_index": "DPM++ SDE Karras",
-                    "sampler_index": "DPM++ 2M Karras",
+                    #"sampler_index": "DPM++ 2M Karras",
+                    "sampler_index": "Euler a",
                     
                 }
                 
                 option_payload = {
-                    #"sd_model_checkpoint": "dreamshaperXL_v21TurboDPMSDE.safetensors [4496b36d48]",
+                    #"sd_model_checkpoint": "sd_xl_base_1.0_0.9vae.safetensors ",
                     #"sd_model_checkpoint": "dreamshaperXL10_alpha2Xl10.safetensors [0f1b80cfe8]",
-                    "sd_model_checkpoint": "animeArtDiffusionXL_alpha3.safetensors",
+                    #"sd_model_checkpoint": "dreamshaperXL_v21TurboDPMSDE.safetensors [4496b36d48]",
+                    #"sd_model_checkpoint": "animeArtDiffusionXL_alpha3.safetensors",
+                    #"sd_model_checkpoint": "aamXLAnimeMix_v10.safetensors",
+                    "sd_model_checkpoint": "aamXLAnimeMix_v10HalfturboEulera.safetensors",
+                    #"sd_model_checkpoint": "sdxlUnstableDiffusers_v11Rundiffusion.safetensors",
                     "sd_vae": "sdxl_vae.safetensors",
                 }
                 
@@ -318,6 +331,44 @@ async def create_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
     OUTPUT_FILE = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav"
     communicate = edge_tts.Communicate(TEXT, VOICE)
     await communicate.save(OUTPUT_FILE)
+        
+        
+def create_elevenlabs_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
+    
+    # check subscription status
+    url = "https://api.elevenlabs.io/v1/user/subscription"
+    headers = {"xi-api-key": ELEVENLABS_API_KEY}
+    response = requests.request("GET", url, headers=headers)
+    char_count = json.loads(response.text)['character_count']
+    char_limit = json.loads(response.text)['character_limit']
+    if (char_limit - char_count) < 500:
+        raise ValueError(f"{char_limit - char_count} Characters remaining, renew your Elevenlabs subscription!")
+    
+    else:
+        OUTPUT_FILE_MP3 = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3"
+        CHUNK_SIZE = 1024
+        url = "https://api.elevenlabs.io/v1/text-to-speech/ErXwobaYiN019PkySvjV"
+
+        headers = {
+          "Accept": "audio/mpeg",
+          "Content-Type": "application/json",
+          "xi-api-key": ELEVENLABS_API_KEY
+        }
+        
+        data = {
+          "text": story_fragment,
+          "model_id": "eleven_multilingual_v2",
+          "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75
+          }
+        }
+
+        response = requests.post(url, json=data, headers=headers)
+        with open(OUTPUT_FILE_MP3, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                if chunk:
+                    f.write(chunk)
     
    
 def createVideoClip(i, CURRENT_PROJECT_DIR):
@@ -325,30 +376,36 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
     story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
 
     # load the audio file using moviepy
-    audio_clip = AudioFileClip(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav")
-
-    # FIX:
+    try:
+        audio_clip = AudioFileClip(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3")
+    except:
+        audio_clip = AudioFileClip(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav")
+    
+    # FIX: 
     # ffmepg incorrectly reporting the duration of the audio.
-    # This causes iter_chunks in AudioClip to try to read frames outside the length of the file.
+    # This causes iter_chunks in AudioClip to try to read frames outside the length of the file. 
     # In FFMPEG_AudioReader get_frame reads the end of the file again, resulting in a glitch.
     # Cut 0.05 from the end to remove glitch
-    # Note: using ffmpeg 6.0 instead of default 4.2.2 from imageio_ffmpeg could be possible fix,
+    # Note: using ffmpeg 6.0 instead of default 4.2.2 from imageio_ffmpeg could be possible fix, 
     # it also reduces metalic noise in audio.
-    audio_clip = audio_clip.subclip(0, audio_clip.duration - 0.05)
+    audio_clip = audio_clip.subclip(0, audio_clip.duration - 0.1)
     
     # add audio fadein / fadeout ot minimize sound glitches
     audio_clip = audio_clip.audio_fadein(0.05).audio_fadeout(0.05)
     
-    # add 1 second silence to begining of audio 
-    silence = AudioClip(make_frame = lambda t: 0, duration = 1.0)
+                                                
+    silence = AudioClip(make_frame = lambda t: 0, duration = 0.6)
+    # add 0.6 second silence to begining of audio 
     audio_clip = concatenate_audioclips([silence, audio_clip])
+    # add 0.6 second silence to end of audio
+    audio_clip = concatenate_audioclips([audio_clip, silence])
     
     # get audio duration
     audio_duration = audio_clip.duration
     
     # use short video clips instead of images (making final video trully animated)
-    # example: animate generated image_x.jpg files using pikalabs and save them in images
-    # directory as movie_x.mp4 files
+    # example: animate generated imageX.jpg files using pikalabs and save them in images
+    # directory as movieX.mp4 files
     if(Path(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").is_file() == True):
         movie_clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").loop(duration = audio_duration)
         
@@ -468,16 +525,18 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
     
     # add backgroud music to video
     if BG_MUSIC == "yes":
+        print(f"{showTime()} Adding music to file...")
         video_clip = final_video
         original_audio = video_clip.audio
         soundtrack = AudioFileClip(str(bg_music_path))
         bg_music = soundtrack.audio_loop(duration=video_clip.duration)
-        bg_music = bg_music.volumex(0.04)
+        bg_music = bg_music.volumex(0.08)
         final_audio = CompositeAudioClip([original_audio, bg_music])
         final_clip = video_clip.set_audio(final_audio)
         final_clip.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=24)
     else:
-        final_video = final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=24)
+        print(f"{showTime()} Writing final video to file...")
+        final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=24)
      
     print(f"{showTime()} Final video created successfully!")
 
@@ -589,15 +648,20 @@ if __name__ == "__main__":
                                 print(f"{showTime()} {j} of {number_of_story_fragments-1} preparing prompts in advance")
                                 test_thread = Process(target=fragment_toPrompt, args=(j, CURRENT_PROJECT_DIR))
                                 test_thread.start()
-                # ^^^^^^ significant speedup, but needs fast CPU and more than 32GB of RAM 
-                
-                # create voiceover using edge_tts
-                if(Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav").is_file() == False):
+                # ^^^^^^ significant speedup, but needs fast CPU and more than 32GB of RAM
+
+                # create voiceover 
+                if(Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav").is_file() == False) and (Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3").is_file() == False):
                     story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
                     do_it = True
                     while(do_it):
                         try: 
-                            asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment, CURRENT_PROJECT_DIR))
+                            if USE_ELEVENLABS == 'yes':
+                                create_elevenlabs_vioceover(story_fragment, CURRENT_PROJECT_DIR)
+                                print(f"{showTime()} Created voiceover using Elevenlabs...")
+                            else:
+                                asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment, CURRENT_PROJECT_DIR))
+                                print(f"{showTime()} Created voiceover using Edge-tts...")
                             do_it = False
                         except Exception as e:
                             wait_time = 10
@@ -607,7 +671,8 @@ if __name__ == "__main__":
                 if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt").is_file() == False):
                     # translate fragment into prompt
                     fragment_toPrompt(i, CURRENT_PROJECT_DIR)
-                    
+                
+                        
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == True) and (Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
                     # do not start all image to video conversions at once
                     time.sleep(3)
@@ -626,21 +691,21 @@ if __name__ == "__main__":
  
             if(using_video_fragments_Processes):
                 # wait for the new process to finish
-                print('Main: Waiting for video_fragments process to terminate...')
+                print(f"{showTime()} Main: Waiting for video_fragments process to terminate...")
                 # block until all tasks are done
                 process.join()
                 # continue on
-                print('Main: video_fragments joined, continuing on')
+                print(f"{showTime()} Main: video_fragments joined, continuing on")
             
             if(Path(CURRENT_PROJECT_DIR+'/'+project_name+".mp4").is_file() == False):
                 # create final video
                 final_video_process = Process(target = makeFinalVideo, args = (project_name, CURRENT_PROJECT_DIR))
                 final_video_process.start()
-                time.sleep(240)
+                time.sleep(10)
                 #vvv
-                # if free virtual memory is less than 300GB, then wait (tweak this value based on your needs)
+                # if free virtual memory is less than this amount of GB, then wait (tweak this value based on your needs)
                 free_swap = int(psutil.swap_memory()[2]/1000000000)
-                while (free_swap < 300):
+                while (free_swap < FREE_SWAP):
                     print(f"{showTime()} Main: High vmem usage! Free swap: {free_swap} -> Waiting...")
                     time.sleep(300)
                     free_swap = int(psutil.swap_memory()[2]/1000000000)
