@@ -5,7 +5,7 @@ Teller of Tales is a project that creates narrated video stories from book chapt
 ## Features:
 * NLP with OpenAI or KeyBERT
 * Image generation with StableDiffusion
-* Text to speech with Edge Text-to-Speech
+* Text to speech with Edge Text-to-Speech or Elevenlabs
 * Video editing with MoviePy
 
 Here is an example of a video story created by Teller of Tales: https://youtu.be/fz-Ez8PsE5A
