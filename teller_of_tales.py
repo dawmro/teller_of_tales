@@ -629,10 +629,12 @@ if __name__ == "__main__":
                 print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
                 
                 # vvvvvv pause / unpause
-                # if cpu usage is more than 90%, wait (tweak this value based on your needs)
-                while (int(psutil.cpu_percent(interval=None)) > 90):
-                    print(f"{showTime()} Main: High CPU usage! -> Waiting...")
+                # if cpu usage is more than 90%, wait (tweak this value based on your needs) 
+                cpu_usage = int(psutil.cpu_percent(interval=0.2, percpu=False))
+                while (cpu_usage > 90):
+                    print(f"{showTime()} Main: High CPU usage! {cpu_usage}% -> Waiting...")
                     time.sleep(5)
+                    cpu_usage = int(psutil.cpu_percent(interval=0.5, percpu=False))
                 # ^^^^^^ pause / unpause
                 
                 # vvvvvv significant speedup, but needs fast CPU and more than 32GB of RAM 
