@@ -42,8 +42,10 @@ import requests
 import io
 import base64
 from PIL import Image, PngImagePlugin
+import shutil
 
 import psutil
+
 
 
 config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
@@ -55,6 +57,7 @@ config.read(config_path)
 DEBUG = config["GENERAL"]["DEBUG"]
 SPEED_UP = config["GENERAL"]["SPEED_UP"]
 FREE_SWAP = int(config["GENERAL"]["FREE_SWAP"])
+FPS = int(config["GENERAL"]["FPS"])
 
 FRAGMENT_LENGTH = int(config["TEXT_FRAGMENT"]["FRAGMENT_LENGTH"])
 
@@ -77,7 +80,21 @@ negative_prompt = config["STABLE_DIFFUSION"]["negative_prompt"]
 
 USE_SD_VIA_API = config["STABLE_DIFFUSION"]["USE_SD_VIA_API"]
 
-
+USE_CHARACTERS_DESCRIPTIONS = config["STABLE_DIFFUSION"]["USE_CHARACTERS_DESCRIPTIONS"]
+# descriptions should help maintain a consistent appearance of generated characters
+if USE_CHARACTERS_DESCRIPTIONS == 'yes':
+    CHARACTERS_DESCRIPTIONS = None
+    char_desc_path = pathlib.Path(__file__).parent.absolute() / "characters_descriptions.ini"
+  
+    if os.path.exists(char_desc_path):
+        char_desc = configparser.ConfigParser()
+        char_desc.read(char_desc_path)
+        if not char_desc["CHARACTERS_DESCRIPTIONS"]:
+            CHARACTERS_DESCRIPTIONS = None
+        else:
+            CHARACTERS_DESCRIPTIONS = dict(char_desc["CHARACTERS_DESCRIPTIONS"])
+   
+    
 if USE_ELEVENLABS == 'yes':
     # Use ELEVENLABS_API_KEY imported from environment variables
     ELEVENLABS_API_KEY = os.environ['ELEVENLABS_API_KEY']
@@ -145,6 +162,7 @@ def createFolders():
         os.makedirs("videos")
 
 
+
 def load_and_split_to_sentences(filename):
 
     # read raw story from txt file
@@ -153,7 +171,7 @@ def load_and_split_to_sentences(filename):
 
     # remove quotes from story
     # gate wotw, ares game, america stranded
-    story = story_raw.replace('#', '.').replace('.."', '."').replace('“', '').replace('”', '').replace('-', ' ').replace('–', ' ').replace('—', ' ').replace('*', ' ').replace('_', '').replace('.....', '').replace('....', '').replace('...', ', ').replace('~', ',').replace('*', ',').replace('\n\n\n', '\n').replace('\n\n', '\n').replace('XXXXXX', ' ').replace('XXXXXX', ' ')#.replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ')
+    story = story_raw.replace('=', '.').replace('#', '.').replace('.."', '."').replace('“', '').replace('”', '').replace('-', ' ').replace('–', ' ').replace('—', ' ').replace('*', ' ').replace('_', '').replace('.....', '').replace('....', '').replace('...', ', ').replace('~', ',').replace('*', ',').replace('\n\n\n', '\n').replace('\n\n', '\n').replace('XXXXXX', ' ').replace('XXXXXX', ' ').replace('xxxxx', ' ')#.replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ')
     
     # summoning america, wait is this just gate, age of memeoris, america in another world
     #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ')
@@ -184,6 +202,7 @@ def load_and_split_to_sentences(filename):
     print('number_of_files:', number_of_files)
     
     return number_of_files
+
 
 
 def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
@@ -248,6 +267,58 @@ def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
     print('number_of_files:', number_of_files)
     
     return number_of_files
+    
+    
+    
+def check_for_characters(story_fragment, char_desc_dict):
+    matched_chars = []
+    for name, desc in char_desc_dict.items():
+        pattern = r'(?i)\b(' + name + r')\b'
+        match = re.search(pattern, story_fragment)
+        if match:
+            matched_chars.append((name, desc))
+            
+    result = ''
+    if matched_chars:
+        result = ', '.join([desc for _, desc in matched_chars])
+        result += ', '
+        
+    return result
+
+
+
+def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
+    story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
+    print(f"{i} Fragment: {story_fragment}")
+    
+    if USE_CHATGPT == 'yes':
+        prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
+        # translate fragment into prompt
+        image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
+        
+    else:
+        ngram_range = (1, 3)
+        if USE_SD_VIA_API == 'yes':
+            ngram_range = (1, 8)
+        kw_model = KeyBERT(model='all-mpnet-base-v2')
+        keywords = kw_model.extract_keywords(
+            story_fragment,
+            keyphrase_ngram_range=ngram_range, 
+            stop_words='english', 
+            highlight=False,
+            top_n=1
+        )
+        keywords_list = list(dict(keywords).keys())
+        
+        image_prompt = ', '.join(keywords_list) 
+        
+    if USE_CHARACTERS_DESCRIPTIONS == 'yes':    
+        if CHARACTERS_DESCRIPTIONS != None:
+            image_prompt = f"{check_for_characters(story_fragment, CHARACTERS_DESCRIPTIONS)}{image_prompt}"
+           
+    print(f"{i} Prompt: {image_prompt}")
+    write_file(image_prompt, f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt") 
+      
       
     
 def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJECT_DIR):
@@ -271,33 +342,39 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
 
                 image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")  
             
-            else:
+            elif USE_SD_VIA_API == 'yes':
                 url = "http://127.0.0.1:7860"
 
                 payload = {
                     "prompt": f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}",
                     "negative_prompt": f"{negative_prompt}",
-                    "steps": 8,
-                    #"steps": 12,
+                    #"steps": 10,
+                    "steps": 20,
                     "width": image_width,
                     "height": image_height,
                     "seed": -1,
-                    #"guidance_scale": "2.0",
+                    #"guidance_scale": "1.6",
                     "guidance_scale": "4.0",
                     #"sampler_index": "DPM++ SDE Karras",
+                    #"sampler_index": "DPM++ 2S a",
                     #"sampler_index": "DPM++ 2M Karras",
                     "sampler_index": "Euler a",
+                    #"sampler_index": "DPM++ 3M SDE Karras",
+                    #"sampler_index": "DPM++ SDE",
                     
                 }
                 
                 option_payload = {
-                    #"sd_model_checkpoint": "sd_xl_base_1.0_0.9vae.safetensors ",
+                    #"sd_model_checkpoint": "animagineXLV31_v31.safetensors",
                     #"sd_model_checkpoint": "dreamshaperXL10_alpha2Xl10.safetensors [0f1b80cfe8]",
                     #"sd_model_checkpoint": "dreamshaperXL_v21TurboDPMSDE.safetensors [4496b36d48]",
-                    #"sd_model_checkpoint": "animeArtDiffusionXL_alpha3.safetensors",
+                    "sd_model_checkpoint": "animeArtDiffusionXL_alpha3.safetensors",
                     #"sd_model_checkpoint": "aamXLAnimeMix_v10.safetensors",
-                    "sd_model_checkpoint": "aamXLAnimeMix_v10HalfturboEulera.safetensors",
+                    #"sd_model_checkpoint": "aamXLAnimeMix_v10HalfturboEulera.safetensors",
                     #"sd_model_checkpoint": "sdxlUnstableDiffusers_v11Rundiffusion.safetensors",
+                    #"sd_model_checkpoint": "sdxlUnstableDiffusers_v10TURBOEDITION.safetensors",
+                    #"sd_model_checkpoint": "lomoxl_.safetensors",
+                    #"sd_model_checkpoint": "boltningRealistic_v10.safetensors",
                     "sd_vae": "sdxl_vae.safetensors",
                 }
                 
@@ -318,6 +395,24 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
                     pnginfo.add_text("parameters", response2.json().get("info"))
                     image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg", pnginfo=pnginfo)
                     
+            elif USE_SD_VIA_API == 'pollinations':
+
+                prompt = f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}"
+                #url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&model=turbo&nologo=true&enhance=true&seed={time.time()}"
+                url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&model=turbo&nologo=true&seed={time.time()}&negative=nsfw"
+                
+                response = requests.get(url=url, timeout=20)
+                print(response.raw)
+                if response.status_code == 200:
+                    image = io.BytesIO(response.content)
+                    img = Image.open(image)
+                    img.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")
+                else:
+                    raise requests.exceptions.HTTPError(f'Failed to download the image. Status code: {response.status_code}')    
+                
+            else:
+                pass
+                
             do_it = False
             
         except Exception as e:
@@ -393,8 +488,10 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
     # add audio fadein / fadeout ot minimize sound glitches
     audio_clip = audio_clip.audio_fadein(0.05).audio_fadeout(0.05)
     
-                                                
-    silence = AudioClip(make_frame = lambda t: 0, duration = 0.6)
+    silence_duration = 0.6
+    if USE_ELEVENLABS == 'yes':
+        silence_duration = 1.0
+    silence = AudioClip(make_frame = lambda t: 0, duration = silence_duration)
     # add 0.6 second silence to begining of audio 
     audio_clip = concatenate_audioclips([silence, audio_clip])
     # add 0.6 second silence to end of audio
@@ -415,7 +512,7 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
         reversed_movie_clip = movie_clip.fx(vfx.time_mirror)
         mirrored_movie_clip = concatenate_videoclips([movie_clip, reversed_movie_clip], padding=-0.2, method="compose")
         movie_clip = mirrored_movie_clip.resize( (image_width, image_height) )
-        movie_clip.write_videofile(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4", fps=24)
+        movie_clip.write_videofile(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4", fps=FPS)
         movie_clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").loop(duration = audio_duration)
 
     else:
@@ -435,7 +532,7 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
     video = CompositeVideoClip([clip, text_clip])
     
     # save Video Clip to a file
-    video_mp4 = video.write_videofile(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4", fps=24)
+    video_mp4 = video.write_videofile(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4", fps=FPS)
     print(f"{showTime()} The Video{i} Has Been Created Successfully!")
         
     
@@ -461,36 +558,8 @@ def askChatGPT(text, model_engine):
             time.sleep(wait_time)
     
     return answer  
-
-
-
-def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
-    story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
-    print(f"{i} Fragment: {story_fragment}")
     
-    if USE_CHATGPT == 'yes':
-        prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
-        # translate fragment into prompt
-        image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
         
-    else:
-        ngram_range = (1, 3)
-        if USE_SD_VIA_API == 'yes':
-            ngram_range = (1, 6)
-        kw_model = KeyBERT(model='all-mpnet-base-v2')
-        keywords = kw_model.extract_keywords(
-            story_fragment,
-            keyphrase_ngram_range=ngram_range, 
-            stop_words='english', 
-            highlight=False,
-            top_n=2
-        )
-        keywords_list = list(dict(keywords).keys())
-        
-        image_prompt = ', '.join(keywords_list)       
-    
-    print(f"{i} Prompt: {image_prompt}")
-    write_file(image_prompt, f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")     
     
 
 def createListOfClips(CURRENT_PROJECT_DIR):
@@ -533,10 +602,11 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
         bg_music = bg_music.volumex(0.08)
         final_audio = CompositeAudioClip([original_audio, bg_music])
         final_clip = video_clip.set_audio(final_audio)
-        final_clip.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=24)
+        print(f"{showTime()} Writing final video to file...")
+        final_clip.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=FPS)
     else:
         print(f"{showTime()} Writing final video to file...")
-        final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=24)
+        final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=FPS)
      
     print(f"{showTime()} Final video created successfully!")
 
@@ -629,12 +699,11 @@ if __name__ == "__main__":
                 print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
                 
                 # vvvvvv pause / unpause
-                # if cpu usage is more than 90%, wait (tweak this value based on your needs) 
-                cpu_usage = int(psutil.cpu_percent(interval=0.2, percpu=False))
-                while (cpu_usage > 90):
+                # if cpu usage is more than 85%, wait (tweak this value based on your needs) 
+                cpu_usage = int(psutil.cpu_percent(interval=0.1, percpu=False))
+                while (cpu_usage > 85):
                     print(f"{showTime()} Main: High CPU usage! {cpu_usage}% -> Waiting...")
-                    time.sleep(5)
-                    cpu_usage = int(psutil.cpu_percent(interval=0.5, percpu=False))
+                    cpu_usage = int(psutil.cpu_percent(interval=5.0, percpu=False))
                 # ^^^^^^ pause / unpause
                 
                 # vvvvvv significant speedup, but needs fast CPU and more than 32GB of RAM 
@@ -703,7 +772,9 @@ if __name__ == "__main__":
                 # create final video
                 final_video_process = Process(target = makeFinalVideo, args = (project_name, CURRENT_PROJECT_DIR))
                 final_video_process.start()
-                time.sleep(10)
+                time_to_wait = int(((i/100.0)+1)*FPS)
+                print(f"{showTime()} Waiting {time_to_wait} second before starting next project")
+                time.sleep(time_to_wait)
                 #vvv
                 # if free virtual memory is less than this amount of GB, then wait (tweak this value based on your needs)
                 free_swap = int(psutil.swap_memory()[2]/1000000000)
