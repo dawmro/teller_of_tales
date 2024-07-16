@@ -77,4 +77,4 @@ huggingface-cli login
 ``` sh
 python .\teller_of_tales.py
 ```
-5. Wait for the script to finish and check the folder with profect for the output video.
+5. Wait for the script to finish and check the folder with project for the output video.
