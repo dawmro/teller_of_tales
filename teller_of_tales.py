@@ -171,7 +171,7 @@ def load_and_split_to_sentences(filename):
 
     # remove quotes from story
     # gate wotw, ares game, america stranded
-    story = story_raw.replace('=', '.').replace('#', '.').replace('.."', '."').replace('“', '').replace('”', '').replace('-', ' ').replace('–', ' ').replace('—', ' ').replace('*', ' ').replace('_', '').replace('.....', '').replace('....', '').replace('...', ', ').replace('~', ',').replace('*', ',').replace('\n\n\n', '\n').replace('\n\n', '\n').replace('XXXXXX', ' ').replace('XXXXXX', ' ').replace('xxxxx', ' ')#.replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ')
+    story = story_raw.replace('>', ' ').replace('<', ' ').replace('=', ' ').replace('#', ' ').replace('.."', '."').replace('“', '').replace('”', '').replace('-', ' ').replace('–', ' ').replace('—', ' ').replace('*', ' ').replace('_', '').replace('.....', '').replace('....', '').replace('...', ' ').replace('~', ' ').replace('*', ',').replace('\n\n\n', '\n').replace('\n\n', '\n').replace('XXXXXX', ' ').replace('XXXXXX', ' ').replace('xxxxx', ' ')#.replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ')
     
     # summoning america, wait is this just gate, age of memeoris, america in another world
     #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ')
@@ -277,6 +277,7 @@ def check_for_characters(story_fragment, char_desc_dict):
         match = re.search(pattern, story_fragment)
         if match:
             matched_chars.append((name, desc))
+            break  # Stop the loop after finding the first match
             
     result = ''
     if matched_chars:
@@ -298,7 +299,7 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
         
     else:
         ngram_range = (1, 3)
-        if USE_SD_VIA_API == 'yes':
+        if USE_SD_VIA_API != 'no':
             ngram_range = (1, 8)
         kw_model = KeyBERT(model='all-mpnet-base-v2')
         keywords = kw_model.extract_keywords(
@@ -368,8 +369,8 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
                     #"sd_model_checkpoint": "animagineXLV31_v31.safetensors",
                     #"sd_model_checkpoint": "dreamshaperXL10_alpha2Xl10.safetensors [0f1b80cfe8]",
                     #"sd_model_checkpoint": "dreamshaperXL_v21TurboDPMSDE.safetensors [4496b36d48]",
-                    "sd_model_checkpoint": "animeArtDiffusionXL_alpha3.safetensors",
-                    #"sd_model_checkpoint": "aamXLAnimeMix_v10.safetensors",
+                    #"sd_model_checkpoint": "animeArtDiffusionXL_alpha3.safetensors",
+                    "sd_model_checkpoint": "aamXLAnimeMix_v10.safetensors",
                     #"sd_model_checkpoint": "aamXLAnimeMix_v10HalfturboEulera.safetensors",
                     #"sd_model_checkpoint": "sdxlUnstableDiffusers_v11Rundiffusion.safetensors",
                     #"sd_model_checkpoint": "sdxlUnstableDiffusers_v10TURBOEDITION.safetensors",
@@ -401,7 +402,21 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
                 #url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&model=turbo&nologo=true&enhance=true&seed={time.time()}"
                 url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&model=turbo&nologo=true&seed={time.time()}&negative=nsfw"
                 
-                response = requests.get(url=url, timeout=20)
+                HEADERS = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5",
+                    "Accept-Encoding": "gzip, deflate",
+                    "Connection": "keep-alive",
+                    "Upgrade-Insecure-Requests": "1",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1",
+                    "Cache-Control": "max-age=0",
+                }
+ 
+                response = requests.get(url=url, headers=HEADERS, timeout=20)
                 print(response.raw)
                 if response.status_code == 200:
                     image = io.BytesIO(response.content)
