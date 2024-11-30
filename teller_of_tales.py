@@ -10,10 +10,8 @@ import json
 import os
 import re
 
-from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 import torch
 
-from gtts import gTTS
 from moviepy.editor import *
 from tqdm.auto import tqdm
 
@@ -46,14 +44,17 @@ import shutil
 
 import psutil
 
+from fake_useragent import UserAgent
+
 
 
 config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
-bg_music_path = pathlib.Path(__file__).parent.absolute() / "bg_music/bg_music2.mp3"
+bg_music_path = pathlib.Path(__file__).parent.absolute() / "bg_music/Fantasy Music - Passing the Crown - Avery Alexander (youtube).mp3"
 
 config = configparser.ConfigParser()
 config.read(config_path)
 
+SPLIT_TEXT_ONLY = config["GENERAL"]["SPLIT_TEXT_ONLY"]
 DEBUG = config["GENERAL"]["DEBUG"]
 SPEED_UP = config["GENERAL"]["SPEED_UP"]
 FREE_SWAP = int(config["GENERAL"]["FREE_SWAP"])
@@ -62,18 +63,16 @@ FPS = int(config["GENERAL"]["FPS"])
 FRAGMENT_LENGTH = int(config["TEXT_FRAGMENT"]["FRAGMENT_LENGTH"])
 
 USE_ELEVENLABS = config["AUDIO"]["USE_ELEVENLABS"]
+USING_F5_TTS = config["AUDIO"]["USING_F5_TTS"]
 VOICE = config["AUDIO"]["VOICE"]
 BG_MUSIC = config["AUDIO"]["BG_MUSIC"]
 
 USE_CHATGPT = config["IMAGE_PROMPT"]["USE_CHATGPT"]
 model_engine = config["IMAGE_PROMPT"]["model_engine"]
 
-NSFW_filter = config["STABLE_DIFFUSION"]["NSFW_filter"]
-lowmem = config["STABLE_DIFFUSION"]["lowmem"]
 seed = int(config["STABLE_DIFFUSION"]["seed"])
 image_width = int(config["STABLE_DIFFUSION"]["image_width"])
 image_height = int(config["STABLE_DIFFUSION"]["image_height"])
-model_id = config["STABLE_DIFFUSION"]["model_id"]
 possitive_prompt_prefix = config["STABLE_DIFFUSION"]["possitive_prompt_prefix"]
 possitive_prompt_sufix = config["STABLE_DIFFUSION"]["possitive_prompt_sufix"]
 negative_prompt = config["STABLE_DIFFUSION"]["negative_prompt"]
@@ -102,24 +101,7 @@ if USE_ELEVENLABS == 'yes':
 if USE_CHATGPT == 'yes':
     # Use API_KEY imported from environment variables
     openai.api_key = os.environ['OPENAI_TOKEN']
-    
-
-
-def write_list(a_list, filename):
-    if DEBUG == 'yes':
-        print("Started writing list data into a json file")
-    with open(filename, "w") as fp:
-        json.dump(a_list, fp)
-        if DEBUG == 'yes':
-            print("Done writing JSON data into .json file")
-
-
-def read_list(filename):
-    # for reading also binary mode is important
-    with open(filename, 'rb') as fp:
-        n_list = json.load(fp)
-        return n_list
-        
+      
                 
 def write_file(file_content, filename):
     if DEBUG == 'yes':
@@ -169,9 +151,9 @@ def load_and_split_to_sentences(filename):
     with open(filename, "r", encoding="utf-8") as file:
         story_raw = file.read()
 
-    # remove quotes from story
+    # remove quotes from story 
     # gate wotw, ares game, america stranded
-    story = story_raw.replace('>', ' ').replace('<', ' ').replace('=', ' ').replace('#', ' ').replace('.."', '."').replace('“', '').replace('”', '').replace('-', ' ').replace('–', ' ').replace('—', ' ').replace('*', ' ').replace('_', '').replace('.....', '').replace('....', '').replace('...', ' ').replace('~', ' ').replace('*', ',').replace('\n\n\n', '\n').replace('\n\n', '\n').replace('XXXXXX', ' ').replace('XXXXXX', ' ').replace('xxxxx', ' ')#.replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ')
+    story = story_raw.replace('é', 'e').replace('>', ' ').replace('<', ' ').replace('=', ' ').replace('#', ' ').replace('.."', '."').replace('“', '').replace('”', '').replace('-', ' ').replace('–', ' ').replace('—', ' ').replace('*', ' ').replace('_', '').replace('.....', '.').replace('....', '.').replace('...', '. ').replace('~', ' ').replace('*', ',').replace('\n\n\n', '\n').replace('\n\n', '\n').replace('XXXXXX', ' ').replace('XXXXXX', ' ').replace('xxxxx', ' ')#.replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ')
     
     # summoning america, wait is this just gate, age of memeoris, america in another world
     #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ')
@@ -184,8 +166,6 @@ def load_and_split_to_sentences(filename):
 
     # split story into list of sentences
     story_sentences_list = sent_tokenize(story)
-    
-    # write_list(story_sentences_list, "text/story_sentences_list.json")
     
     for i, story_sentence in enumerate(story_sentences_list):
         write_file(story_sentence, f"text/story_sentences/story_sentence{i}.txt")
@@ -250,8 +230,6 @@ def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
     if current_fragment is not None:
         story_fragments.append(current_fragment)
     
-    # write_list(story_fragments, "text/story_fragments.json")
-    
     for i, story_fragment in enumerate(story_fragments):
         write_file(story_fragment, f"text/story_fragments/story_fragment{i}.txt")
     
@@ -282,13 +260,14 @@ def check_for_characters(story_fragment, char_desc_dict):
     result = ''
     if matched_chars:
         result = ', '.join([desc for _, desc in matched_chars])
+        result = "[[[ " + result + " ]]]"
         result += ', '
         
     return result
 
 
 
-def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
+def fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width: int=1, image_height: int=1, speedup: bool=False):
     story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
     print(f"{i} Fragment: {story_fragment}")
     
@@ -310,7 +289,8 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
             top_n=1
         )
         keywords_list = list(dict(keywords).keys())
-        
+        del kw_model
+        del keywords
         image_prompt = ', '.join(keywords_list) 
         
     if USE_CHARACTERS_DESCRIPTIONS == 'yes':    
@@ -319,31 +299,26 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR):
            
     print(f"{i} Prompt: {image_prompt}")
     write_file(image_prompt, f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt") 
+    
+    # vvv if using pollinations generate image immediately when Prompt is ready
+    if (speedup == True) and (i%4 != 0):
+        print(f"{showTime()} {i} Frag_to_prompt_thread: Starting immediate prompt_to_image ...")
+        pollinations_thread = Process(target=prompt_to_image, args=(i, image_width, image_height, CURRENT_PROJECT_DIR, True))
+        pollinations_thread.start() 
+        pollinations_thread.join()
+        print(f"{showTime()} {i} Frag_to_prompt_thread: pollinations_thread joined.")
+    # ^^^ if using pollinations generate image immediately when Prompt is ready
       
       
     
-def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJECT_DIR):
+def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once: bool=False):
     do_it = True
     wait_time = 10
     image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
     print(i, image_prompt)
     while(do_it):
         try:
-            if USE_SD_VIA_API == 'no':
-                if lowmem == "yes":
-                    # restart StableDiffusionPipeline
-                    pipe, generator = prepare_pipeline()
-                
-                # scale number of steps with image size to prevent large grainy images
-                steps = int(min(((20 * image_height * image_width) / 407040) + 1, 50)) 
-                
-                prompt = possitive_prompt_prefix + image_prompt + possitive_prompt_sufix
-                    
-                image = pipe(prompt=prompt, negative_prompt=negative_prompt, height=image_height, width=image_width, guidance_scale=6.0, generator=generator, num_inference_steps=steps).images[0]
-
-                image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")  
-            
-            elif USE_SD_VIA_API == 'yes':
+            if USE_SD_VIA_API == 'yes':
                 url = "http://127.0.0.1:7860"
 
                 payload = {
@@ -368,12 +343,9 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
                 option_payload = {
                     #"sd_model_checkpoint": "animagineXLV31_v31.safetensors",
                     #"sd_model_checkpoint": "dreamshaperXL10_alpha2Xl10.safetensors [0f1b80cfe8]",
-                    #"sd_model_checkpoint": "dreamshaperXL_v21TurboDPMSDE.safetensors [4496b36d48]",
                     #"sd_model_checkpoint": "animeArtDiffusionXL_alpha3.safetensors",
                     "sd_model_checkpoint": "aamXLAnimeMix_v10.safetensors",
-                    #"sd_model_checkpoint": "aamXLAnimeMix_v10HalfturboEulera.safetensors",
                     #"sd_model_checkpoint": "sdxlUnstableDiffusers_v11Rundiffusion.safetensors",
-                    #"sd_model_checkpoint": "sdxlUnstableDiffusers_v10TURBOEDITION.safetensors",
                     #"sd_model_checkpoint": "lomoxl_.safetensors",
                     #"sd_model_checkpoint": "boltningRealistic_v10.safetensors",
                     "sd_vae": "sdxl_vae.safetensors",
@@ -399,8 +371,8 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
             elif USE_SD_VIA_API == 'pollinations':
 
                 prompt = f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}"
-                #url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&model=turbo&nologo=true&enhance=true&seed={time.time()}"
-                url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&model=turbo&nologo=true&seed={time.time()}&negative=nsfw"
+                #url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&model=flux&nologo=true&enhance=true&seed={time.time()}"
+                url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&nologo=true&model=flux&enhance=true&seed={time.time()}&negative=nsfw"
                 
                 HEADERS = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
@@ -415,13 +387,17 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
                     "Sec-Fetch-User": "?1",
                     "Cache-Control": "max-age=0",
                 }
+                
+                ua = UserAgent()
+                HEADERS["User-Agent"] = ua.random
  
-                response = requests.get(url=url, headers=HEADERS, timeout=20)
-                print(response.raw)
+                response = requests.get(url=url, headers=HEADERS, timeout=60)
+                print(f"{showTime()} {i}: {response.text[:100]}")
                 if response.status_code == 200:
                     image = io.BytesIO(response.content)
                     img = Image.open(image)
-                    img.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")
+                    if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
+                        img.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")
                 else:
                     raise requests.exceptions.HTTPError(f'Failed to download the image. Status code: {response.status_code}')    
                 
@@ -431,8 +407,12 @@ def prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJE
             do_it = False
             
         except Exception as e:
-            print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
-            time.sleep(wait_time)
+            if try_once:
+                do_it = False
+                print(f"Exception!!! \n{e} \nNot trying again.")
+            else:    
+                print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
+                time.sleep(wait_time)
 
 
 async def create_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
@@ -480,6 +460,7 @@ def create_elevenlabs_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
                 if chunk:
                     f.write(chunk)
     
+    
    
 def createVideoClip(i, CURRENT_PROJECT_DIR):
 
@@ -498,18 +479,22 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
     # Cut 0.05 from the end to remove glitch
     # Note: using ffmpeg 6.0 instead of default 4.2.2 from imageio_ffmpeg could be possible fix, 
     # it also reduces metalic noise in audio.
-    audio_clip = audio_clip.subclip(0, audio_clip.duration - 0.1)
+    if USING_F5_TTS == "yes":
+        audio_clip = audio_clip.subclip(0, audio_clip.duration - 0.5)
+    else:
+        audio_clip = audio_clip.subclip(0, audio_clip.duration - 0.1)
     
     # add audio fadein / fadeout ot minimize sound glitches
     audio_clip = audio_clip.audio_fadein(0.05).audio_fadeout(0.05)
     
-    silence_duration = 0.6
+    silence_duration = 0.5
     if USE_ELEVENLABS == 'yes':
         silence_duration = 1.0
+        
     silence = AudioClip(make_frame = lambda t: 0, duration = silence_duration)
-    # add 0.6 second silence to begining of audio 
+    # add 0.5 second silence to begining of audio 
     audio_clip = concatenate_audioclips([silence, audio_clip])
-    # add 0.6 second silence to end of audio
+    # add 0.5 second silence to end of audio
     audio_clip = concatenate_audioclips([audio_clip, silence])
     
     # get audio duration
@@ -575,8 +560,6 @@ def askChatGPT(text, model_engine):
     return answer  
     
         
-    
-
 def createListOfClips(CURRENT_PROJECT_DIR):
 
     clips = []
@@ -626,48 +609,9 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
     print(f"{showTime()} Final video created successfully!")
 
     
-def prepare_pipeline():
-    # vvvvvvvvv prepare StableDiffusionPipeline 
-    # clear cuda cache
-    with torch.no_grad():
-        torch.cuda.empty_cache()
-        
-    pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16)
-    pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-    
-    # if limited by GPU memory (4GB VRAM):
-    if lowmem == 'yes': 
-        # 1. do not move the pipeline to CUDA beforehand or else the gain in memory consumption will only be minimal
-        # pipe = pipe.to("cuda")
-        # 2. offload the weights to CPU and only load them to GPU when performing the forward pass
-        pipe.enable_sequential_cpu_offload()
-        # 3. consider chunking the attention computation  
-        pipe.enable_attention_slicing(1)           
-    else:
-        pipe = pipe.to("cuda")
-    
-    # randomize seed
-    if seed == -1:    
-        generator = torch.Generator("cuda")
-    # use manual seed    
-    else:
-        generator = torch.Generator("cuda").manual_seed(seed)
-        
-    def dummy_checker(images, **kwargs): return images, False
-    if NSFW_filter == 'no':
-        pipe.safety_checker = dummy_checker 
-   
-    return pipe, generator
-    # ^^^^^^^^ prepare StableDiffusionPipeline 
     
 
 if __name__ == "__main__":
-    
-    if USE_SD_VIA_API == 'no':
-        # prepare StableDiffusionPipeline
-        pipe, generator = prepare_pipeline()
-    else:
-        pipe, generator = None, None
     
     print(f"{showTime()}")
     # Get current working directory
@@ -688,6 +632,7 @@ if __name__ == "__main__":
        
     # run each project in PROJECTS_DIR in sequence
     for project_name in project_names:
+        processes_list = []
         CURRENT_PROJECT_DIR = CWD+'/'+PROJECTS_DIR+'/'+project_name
         os.chdir(CURRENT_PROJECT_DIR)
         print("Current working directory: {0}".format(os.getcwd())) 
@@ -699,11 +644,18 @@ if __name__ == "__main__":
             # Create directiories for text, audio, images and video files    
             createFolders()
             
-            # load story and split it by sentence
-            number_of_story_sentences = load_and_split_to_sentences("story.txt")
+            if len(os.listdir(f"{CURRENT_PROJECT_DIR}/text/story_fragments")) == 0:
+                # load story and split it by sentence
+                number_of_story_sentences = load_and_split_to_sentences("story.txt")
+                
+                # group sentences into story fragments of a given length
+                number_of_story_fragments = sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH)
+                
+            else:
+                number_of_story_fragments = len(os.listdir(f"{CURRENT_PROJECT_DIR}/text/story_fragments"))
             
-            # group sentences into story fragments of a given length
-            number_of_story_fragments = sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH)
+            if SPLIT_TEXT_ONLY == "yes":
+                continue
             
             image_prompts = []
             
@@ -714,12 +666,21 @@ if __name__ == "__main__":
                 print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
                 
                 # vvvvvv pause / unpause
-                # if cpu usage is more than 85%, wait (tweak this value based on your needs) 
+                # if cpu usage is more than 95%, wait (tweak this value based on your needs) 
                 cpu_usage = int(psutil.cpu_percent(interval=0.1, percpu=False))
-                while (cpu_usage > 85):
+                while (cpu_usage > 90):
                     print(f"{showTime()} Main: High CPU usage! {cpu_usage}% -> Waiting...")
-                    cpu_usage = int(psutil.cpu_percent(interval=5.0, percpu=False))
+                    cpu_usage = int(psutil.cpu_percent(interval=4.0, percpu=False))
                 # ^^^^^^ pause / unpause
+                
+                #vvv
+                # if free virtual memory is less than this amount of GB, then wait (tweak this value based on your needs)
+                free_swap = int(psutil.swap_memory()[2]/1000000000)
+                while (free_swap < FREE_SWAP):
+                    print(f"{showTime()} Main: High vmem usage! Free swap: {free_swap} -> Waiting...")
+                    time.sleep(300)
+                    free_swap = int(psutil.swap_memory()[2]/1000000000)
+                #^^^
                 
                 # vvvvvv significant speedup, but needs fast CPU and more than 32GB of RAM 
                 if(SPEED_UP == 'yes'):
@@ -732,8 +693,8 @@ if __name__ == "__main__":
                             if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{j}.txt").is_file() == False):
                                 # translate fragment into prompt
                                 print(f"{showTime()} {j} of {number_of_story_fragments-1} preparing prompts in advance")
-                                test_thread = Process(target=fragment_toPrompt, args=(j, CURRENT_PROJECT_DIR))
-                                test_thread.start()
+                                frag_to_prompt_thread = Process(target=fragment_toPrompt, args=(j, CURRENT_PROJECT_DIR,  image_width, image_height, True if isinstance(USE_SD_VIA_API, str) and USE_SD_VIA_API == "pollinations" else False))
+                                frag_to_prompt_thread.start()                       
                 # ^^^^^^ significant speedup, but needs fast CPU and more than 32GB of RAM
 
                 # create voiceover 
@@ -756,7 +717,7 @@ if __name__ == "__main__":
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt").is_file() == False):
                     # translate fragment into prompt
-                    fragment_toPrompt(i, CURRENT_PROJECT_DIR)
+                    fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width, image_height, False)
                 
                         
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == True) and (Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
@@ -765,7 +726,7 @@ if __name__ == "__main__":
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
                     # generate image form prompt
-                    prompt_to_image(pipe, generator, i, image_width, image_height, CURRENT_PROJECT_DIR)
+                    prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR)
                     
                 if(Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
                     # create video clip using story fragment and generated image
@@ -774,33 +735,32 @@ if __name__ == "__main__":
                     process = Process(target = createVideoClip, args = (i, CURRENT_PROJECT_DIR))
                     # start the new process
                     process.start()
+                    processes_list.append(process)
  
             if(using_video_fragments_Processes):
                 # wait for the new process to finish
                 print(f"{showTime()} Main: Waiting for video_fragments process to terminate...")
                 # block until all tasks are done
-                process.join()
+                for process in processes_list:
+                    process.join() # call to ensure subsequent line (e.g. restart_program) 
+                    # is not called until all processes finish
+                time.sleep(1)
                 # continue on
                 print(f"{showTime()} Main: video_fragments joined, continuing on")
+
             
             if(Path(CURRENT_PROJECT_DIR+'/'+project_name+".mp4").is_file() == False):
                 # create final video
                 final_video_process = Process(target = makeFinalVideo, args = (project_name, CURRENT_PROJECT_DIR))
                 final_video_process.start()
-                time_to_wait = int(((i/100.0)+1)*FPS)
+                time_to_wait = int(((i/25.0)+1)*FPS)
                 print(f"{showTime()} Waiting {time_to_wait} second before starting next project")
                 time.sleep(time_to_wait)
-                #vvv
-                # if free virtual memory is less than this amount of GB, then wait (tweak this value based on your needs)
-                free_swap = int(psutil.swap_memory()[2]/1000000000)
-                while (free_swap < FREE_SWAP):
-                    print(f"{showTime()} Main: High vmem usage! Free swap: {free_swap} -> Waiting...")
-                    time.sleep(300)
-                    free_swap = int(psutil.swap_memory()[2]/1000000000)
-                #^^^
+
                 # block until all tasks are done    
                 #final_video_process.join()
                 #print('Main: final_video_process joined, continuing on')
+                #pause()
 
         
    
