@@ -46,11 +46,13 @@ import psutil
 
 from fake_useragent import UserAgent
 
+from moviepy.config import change_settings
+change_settings({"FFMPEG_BINARY":"ffmpeg"})
+
 
 
 config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
-bg_music_path = pathlib.Path(__file__).parent.absolute() / "bg_music/Fantasy Music - Passing the Crown - Avery Alexander (youtube).mp3"
-
+#BG_MUSIC_PATH = pathlib.Path(__file__).parent.absolute() / "bg_music/Fantasy Music - Passing the Crown - Avery Alexander (youtube).mp3"
 config = configparser.ConfigParser()
 config.read(config_path)
 
@@ -66,6 +68,7 @@ USE_ELEVENLABS = config["AUDIO"]["USE_ELEVENLABS"]
 USING_F5_TTS = config["AUDIO"]["USING_F5_TTS"]
 VOICE = config["AUDIO"]["VOICE"]
 BG_MUSIC = config["AUDIO"]["BG_MUSIC"]
+BG_MUSIC_PATH = pathlib.Path(__file__).parent.absolute() / config["AUDIO"]["BG_MUSIC_PATH"]
 
 USE_CHATGPT = config["IMAGE_PROMPT"]["USE_CHATGPT"]
 model_engine = config["IMAGE_PROMPT"]["model_engine"]
@@ -331,8 +334,8 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once:
                     "seed": -1,
                     #"guidance_scale": "1.6",
                     "guidance_scale": "4.0",
-                    #"sampler_index": "DPM++ SDE Karras",
-                    #"sampler_index": "DPM++ 2S a",
+                    #"sampler_index": "DPM++ 2M SDE Karras",
+                    #"sampler_index": "DPM++ 3M SDE Exponential",
                     #"sampler_index": "DPM++ 2M Karras",
                     "sampler_index": "Euler a",
                     #"sampler_index": "DPM++ 3M SDE Karras",
@@ -347,7 +350,7 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once:
                     "sd_model_checkpoint": "aamXLAnimeMix_v10.safetensors",
                     #"sd_model_checkpoint": "sdxlUnstableDiffusers_v11Rundiffusion.safetensors",
                     #"sd_model_checkpoint": "lomoxl_.safetensors",
-                    #"sd_model_checkpoint": "boltningRealistic_v10.safetensors",
+                    #"sd_model_checkpoint": "sdxlYamersAnime_stageAnima.safetensors",
                     "sd_vae": "sdxl_vae.safetensors",
                 }
                 
@@ -512,7 +515,7 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
         reversed_movie_clip = movie_clip.fx(vfx.time_mirror)
         mirrored_movie_clip = concatenate_videoclips([movie_clip, reversed_movie_clip], padding=-0.2, method="compose")
         movie_clip = mirrored_movie_clip.resize( (image_width, image_height) )
-        movie_clip.write_videofile(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4", fps=FPS)
+        movie_clip.write_videofile(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4", fps=FPS, codec="h264_nvenc")
         movie_clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").loop(duration = audio_duration)
 
     else:
@@ -532,7 +535,7 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
     video = CompositeVideoClip([clip, text_clip])
     
     # save Video Clip to a file
-    video_mp4 = video.write_videofile(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4", fps=FPS)
+    video_mp4 = video.write_videofile(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4", fps=FPS, codec="h264_nvenc")
     print(f"{showTime()} The Video{i} Has Been Created Successfully!")
         
     
@@ -593,19 +596,16 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
     # add backgroud music to video
     if BG_MUSIC == "yes":
         print(f"{showTime()} Adding music to file...")
-        video_clip = final_video
-        original_audio = video_clip.audio
-        soundtrack = AudioFileClip(str(bg_music_path))
-        bg_music = soundtrack.audio_loop(duration=video_clip.duration)
+        original_audio = final_video.audio
+        soundtrack = AudioFileClip(str(BG_MUSIC_PATH))
+        bg_music = soundtrack.audio_loop(duration=final_video.duration)
         bg_music = bg_music.volumex(0.08)
         final_audio = CompositeAudioClip([original_audio, bg_music])
-        final_clip = video_clip.set_audio(final_audio)
-        print(f"{showTime()} Writing final video to file...")
-        final_clip.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=FPS)
-    else:
-        print(f"{showTime()} Writing final video to file...")
-        final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=FPS)
-     
+        final_video = final_video.set_audio(final_audio)
+    
+    print(f"{showTime()} Writing final video to file...")
+    final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=FPS, codec="h264_nvenc")
+        
     print(f"{showTime()} Final video created successfully!")
 
     

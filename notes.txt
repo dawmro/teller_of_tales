@@ -1,0 +1,64 @@
+# GPU acceleration for moviepy
+
+1. Modify env\Lib\site-packages\moviepy\video\tools\drawing.py by adding:
+
+import torch
+
+
+def blit_gpu(im1, im2, pos=None, mask=None, ismask=False):
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    if pos is None:
+        pos = [0, 0]
+
+    xp, yp = pos
+    x1 = max(0, -xp)
+    y1 = max(0, -yp)
+    h1, w1 = im1.shape[:2]
+    h2, w2 = im2.shape[:2]
+    xp2 = min(w2, xp + w1)
+    yp2 = min(h2, yp + h1)
+    x2 = min(w1, w2 - xp)
+    y2 = min(h1, h2 - yp)
+    xp1 = max(0, xp)
+    yp1 = max(0, yp)
+
+    if (xp1 >= xp2) or (yp1 >= yp2):
+        return im2
+
+    if not isinstance(im1, torch.Tensor):               # 5.43 ms per loop / 100 loops
+        im1 = torch.tensor(im1, device=device)
+    if not isinstance(im2, torch.Tensor):
+        im2 = torch.tensor(im2, device=device)
+
+    blitted = im1[y1:y2, x1:x2]
+
+    new_im2 = im2.clone()
+
+    if mask is None:
+        new_im2[yp1:yp2, xp1:xp2] = blitted
+    else:
+        if not isinstance(mask, torch.Tensor):          # 2.71 ms per loop / 10 loops
+            mask = torch.tensor(mask[y1:y2, x1:x2], device=device)  # 1.45 ms / 100 loops
+        else:
+            mask = mask[y1:y2, x1:x2]
+        if len(im1.shape) == 3:
+            mask = mask.unsqueeze(-1).repeat(1, 1, 3)
+        blit_region = new_im2[yp1:yp2, xp1:xp2]
+        new_im2[yp1:yp2, xp1:xp2] = (1.0 * mask * blitted + (1.0 - mask) * blit_region)
+
+    return new_im2.cpu().numpy().astype("uint8") if not ismask else new_im2.cpu().numpy()   # 6.13 ms / 100 loops
+    #return new_im2 if not ismask else new_im2
+
+
+
+2. Modify  of env\Lib\site-packages\moviepy\video\VideoClip.py 
+
+Add to the beginning of file:
+from .tools.drawing import blit, blit_gpu
+
+
+Replace line 565:
+return blit_gpu(img, picture, pos, mask=mask, ismask=self.ismask)
+
+
