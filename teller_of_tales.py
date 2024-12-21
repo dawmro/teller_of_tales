@@ -49,6 +49,9 @@ from fake_useragent import UserAgent
 from moviepy.config import change_settings
 change_settings({"FFMPEG_BINARY":"ffmpeg"})
 
+from ollama import chat
+from ollama import ChatResponse
+
 
 
 config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
@@ -270,19 +273,51 @@ def check_for_characters(story_fragment, char_desc_dict):
 
 
 
+
+def workaround_when_chatbot_refuses_to_answer(image_prompt: str, story_fragment: str):
+    ngram_range = (1, 8)
+    kw_model = KeyBERT(model='all-mpnet-base-v2')
+    keywords = kw_model.extract_keywords(
+        story_fragment,
+        keyphrase_ngram_range=ngram_range, 
+        stop_words='english', 
+        highlight=False,
+        top_n=1
+    )
+    keywords_list = list(dict(keywords).keys())
+    del kw_model
+    del keywords
+    image_prompt = ', '.join(keywords_list)
+    return image_prompt
+
+
+
+
 def fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width: int=1, image_height: int=1, speedup: bool=False):
     story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
     print(f"{i} Fragment: {story_fragment}")
     
+    # probably needs some improvements
+    prefix = "You are an expert in crafting intricate prompts for the generative AI 'Stable Diffusion XL'. Respond only with image prompt and nothing else. Suggest good image prompt to illustrate the following fragment from story, make description illustrative, precise and detailed, one sentence, max 20 words: "
+    
     if USE_CHATGPT == 'yes':
-        prefix = "Suggest good image to illustrate the following fragment from story, make descrpition short and precise, one sentence, max 10 words: "
+       
         # translate fragment into prompt
         image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
         
+    elif USE_CHATGPT == 'ollama':
+        
+        # translate fragment into prompt 
+        response: ChatResponse = chat(model='llama3.2:3b', messages=[
+            {
+                'role': 'user',
+                'content': prefix + story_fragment,
+            },
+        ])
+        image_prompt = (response['message']['content']).replace('"', '')
+            
     else:
-        ngram_range = (1, 3)
-        if USE_SD_VIA_API != 'no':
-            ngram_range = (1, 8)
+        ngram_range = (1, 8)
         kw_model = KeyBERT(model='all-mpnet-base-v2')
         keywords = kw_model.extract_keywords(
             story_fragment,
@@ -295,12 +330,18 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width: int=1, image_height: 
         del kw_model
         del keywords
         image_prompt = ', '.join(keywords_list) 
+    
+    # I cannot provide information on how to create explicit content. 
+    # Can I help you with something else?
+    if "?" in image_prompt:
+        print("Chatbot refuses to answer, using KeyBERT instead")
+        image_prompt = workaround_when_chatbot_refuses_to_answer(image_prompt,story_fragment)
         
     if USE_CHARACTERS_DESCRIPTIONS == 'yes':    
         if CHARACTERS_DESCRIPTIONS != None:
             image_prompt = f"{check_for_characters(story_fragment, CHARACTERS_DESCRIPTIONS)}{image_prompt}"
            
-    print(f"{i} Prompt: {image_prompt}")
+    print(f"{i} Created Prompt: {image_prompt}")
     write_file(image_prompt, f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt") 
     
     # vvv if using pollinations generate image immediately when Prompt is ready
@@ -318,7 +359,7 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once:
     do_it = True
     wait_time = 10
     image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
-    print(i, image_prompt)
+    print(f"{i} Loaded Prompt: {image_prompt}")
     while(do_it):
         try:
             if USE_SD_VIA_API == 'yes':
@@ -599,7 +640,7 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
         original_audio = final_video.audio
         soundtrack = AudioFileClip(str(BG_MUSIC_PATH))
         bg_music = soundtrack.audio_loop(duration=final_video.duration)
-        bg_music = bg_music.volumex(0.08)
+        bg_music = bg_music.volumex(0.06)
         final_audio = CompositeAudioClip([original_audio, bg_music])
         final_video = final_video.set_audio(final_audio)
     
