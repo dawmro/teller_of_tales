@@ -1,9 +1,9 @@
 # teller_of_tales
 
-Teller of Tales is a project that creates narrated video stories from book chapters using natural language processing (NLP), OpenAI, and StableDiffusion. It can run multiple projects at once and generate videos automatically and unsupervised. The results may vary depending on the input text and the chosen options.
+Teller of Tales is a project that creates narrated video stories from book chapters using natural language processing (NLP), OpenAI, Ollama and StableDiffusion. It can run multiple projects at once and generate videos automatically and unsupervised. The results may vary depending on the input text and the chosen options.
 
 ## Features:
-* NLP with OpenAI or KeyBERT
+* NLP with OpenAI, Ollama or KeyBERT
 * Image generation with StableDiffusion
 * Text to speech with Edge Text-to-Speech or Elevenlabs
 * Video editing with MoviePy
