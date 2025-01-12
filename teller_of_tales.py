@@ -75,6 +75,7 @@ BG_MUSIC_PATH = pathlib.Path(__file__).parent.absolute() / config["AUDIO"]["BG_M
 
 USE_CHATGPT = config["IMAGE_PROMPT"]["USE_CHATGPT"]
 model_engine = config["IMAGE_PROMPT"]["model_engine"]
+OLLAMA_MODEL = config["IMAGE_PROMPT"]["OLLAMA_MODEL"]
 
 seed = int(config["STABLE_DIFFUSION"]["seed"])
 image_width = int(config["STABLE_DIFFUSION"]["image_width"])
@@ -84,6 +85,7 @@ possitive_prompt_sufix = config["STABLE_DIFFUSION"]["possitive_prompt_sufix"]
 negative_prompt = config["STABLE_DIFFUSION"]["negative_prompt"]
 
 USE_SD_VIA_API = config["STABLE_DIFFUSION"]["USE_SD_VIA_API"]
+SD_URL = config["STABLE_DIFFUSION"]["SD_URL"]
 
 USE_CHARACTERS_DESCRIPTIONS = config["STABLE_DIFFUSION"]["USE_CHARACTERS_DESCRIPTIONS"]
 # descriptions should help maintain a consistent appearance of generated characters
@@ -159,7 +161,7 @@ def load_and_split_to_sentences(filename):
 
     # remove quotes from story 
     # gate wotw, ares game, america stranded
-    story = story_raw.replace('é', 'e').replace('>', ' ').replace('<', ' ').replace('=', ' ').replace('#', ' ').replace('.."', '."').replace('“', '').replace('”', '').replace('-', ' ').replace('–', ' ').replace('—', ' ').replace('*', ' ').replace('_', '').replace('.....', '.').replace('....', '.').replace('...', '. ').replace('~', ' ').replace('*', ',').replace('\n\n\n', '\n').replace('\n\n', '\n').replace('XXXXXX', ' ').replace('XXXXXX', ' ').replace('xxxxx', ' ')#.replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ')
+    story = story_raw.replace('é', 'e').replace('>', ' ').replace('<', ' ').replace('=', ' ').replace('#', ' ').replace('.."', '."').replace('“', '').replace('”', '').replace('-', '').replace('–', '').replace('—', '').replace('*', ' ').replace('_', '').replace('.....', '.').replace('....', '.').replace('...', '. ').replace('~', ' ').replace('*', ',').replace('\n\n\n', '\n').replace('\n\n', '\n').replace('XXXXXX', ' ').replace('XXXXXX', ' ').replace('xxxxx', ' ')#.replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ')
     
     # summoning america, wait is this just gate, age of memeoris, america in another world
     #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ')
@@ -298,7 +300,7 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width: int=1, image_height: 
     print(f"{i} Fragment: {story_fragment}")
     
     # probably needs some improvements
-    prefix = "You are an expert in crafting intricate prompts for the generative AI 'Stable Diffusion XL'. Respond only with image prompt and nothing else. Suggest good image prompt to illustrate the following fragment from story, make description illustrative, precise and detailed, one sentence, max 20 words: "
+    prefix = f"You are an expert in crafting intricate prompts for the generative AI 'Stable Diffusion XL'. Create a prompt that does not conflict with the following style and setting of the story: {possitive_prompt_sufix}. Respond only with image prompt and nothing else. Suggest good image prompt to illustrate the following fragment from story, make description illustrative, precise and detailed, one sentence, max 20 words: "
     
     if USE_CHATGPT == 'yes':
        
@@ -308,13 +310,13 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width: int=1, image_height: 
     elif USE_CHATGPT == 'ollama':
         
         # translate fragment into prompt 
-        response: ChatResponse = chat(model='llama3.2:3b', messages=[
+        response: ChatResponse = chat(model=OLLAMA_MODEL, messages=[
             {
                 'role': 'user',
                 'content': prefix + story_fragment,
             },
         ])
-        image_prompt = (response['message']['content']).replace('"', '')
+        image_prompt = (response['message']['content']).replace("“", '').replace("”", '').replace("‘", "'").replace("’", "'").replace('"', '')
             
     else:
         ngram_range = (1, 8)
@@ -333,7 +335,7 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width: int=1, image_height: 
     
     # I cannot provide information on how to create explicit content. 
     # Can I help you with something else?
-    if "?" in image_prompt:
+    if any(phrase in image_prompt for phrase in ["I can", "?"]):
         print("Chatbot refuses to answer, using KeyBERT instead")
         image_prompt = workaround_when_chatbot_refuses_to_answer(image_prompt,story_fragment)
         
@@ -363,7 +365,7 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once:
     while(do_it):
         try:
             if USE_SD_VIA_API == 'yes':
-                url = "http://127.0.0.1:7860"
+                url = SD_URL
 
                 payload = {
                     "prompt": f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}",
@@ -395,7 +397,7 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once:
                     "sd_vae": "sdxl_vae.safetensors",
                 }
                 
-                requests.post(url="http://127.0.0.1:7860/sdapi/v1/options", json=option_payload)
+                requests.post(url=f"{url}/sdapi/v1/options", json=option_payload)
                 response = requests.post(url=f'{url}/sdapi/v1/txt2img', json=payload)
 
                 r = response.json()
@@ -609,6 +611,13 @@ def createListOfClips(CURRENT_PROJECT_DIR):
     clips = []
     l_files = os.listdir(CURRENT_PROJECT_DIR+"/videos")
     l_files.sort(key=lambda f: int(re.sub('\D', '', f)))
+    
+    #no_digit_files = [f for f in l_files if not re.search('\d', f)]
+    #l_files.sort(key=lambda f: int(re.sub('\D', '', f)) if re.search('\d', f) else float('inf'))
+    #print("Files without digits:")
+    #for file in no_digit_files:
+    #    print(file)
+        
     for file in l_files:
         clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/videos/{file}")
         clips.append(clip)
@@ -702,6 +711,29 @@ if __name__ == "__main__":
             
             using_video_fragments_Processes = False
   
+  
+            # vvv ollama pre-generate 
+            if USE_CHATGPT == 'ollama':
+                response = requests.post(url=f"{SD_URL}/sdapi/v1/unload-checkpoint", json={})
+                print(response.text)
+                time.sleep(1)
+                for o in range(number_of_story_fragments):
+                    if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{o}.txt").is_file() == False):
+                        # translate fragment into prompt
+                        fragment_toPrompt(o, CURRENT_PROJECT_DIR, image_width, image_height, False)
+                        
+                # unload ollama model        
+                url = 'http://localhost:11434/api/generate'
+                data = {'model': OLLAMA_MODEL, 'keep_alive': 0}
+                response = requests.post(url, json=data)
+                print(response.text)
+                time.sleep(1)
+                response = requests.post(url=f"{SD_URL}/sdapi/v1/reload-checkpoint", json={})
+                print(response.text)
+                time.sleep(1)
+            # ^^^ ollama pre-generate 
+                
+                
             # for each story fragment
             for i in range(number_of_story_fragments):
                 print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
