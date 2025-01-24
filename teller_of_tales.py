@@ -52,6 +52,8 @@ change_settings({"FFMPEG_BINARY":"ffmpeg"})
 from ollama import chat
 from ollama import ChatResponse
 
+import gc
+
 
 
 config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
@@ -291,6 +293,8 @@ def workaround_when_chatbot_refuses_to_answer(image_prompt: str, story_fragment:
     keywords_list = list(dict(keywords).keys())
     del kw_model
     del keywords
+    # Force a garbage collection
+    gc.collect()
     image_prompt = ', '.join(keywords_list)
     return image_prompt
 
@@ -321,19 +325,7 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width: int=1, image_height: 
         image_prompt = (response['message']['content']).replace("“", '').replace("”", '').replace("‘", "'").replace("’", "'").replace('"', '')
             
     else:
-        ngram_range = (1, 8)
-        kw_model = KeyBERT(model='all-mpnet-base-v2')
-        keywords = kw_model.extract_keywords(
-            story_fragment,
-            keyphrase_ngram_range=ngram_range, 
-            stop_words='english', 
-            highlight=False,
-            top_n=1
-        )
-        keywords_list = list(dict(keywords).keys())
-        del kw_model
-        del keywords
-        image_prompt = ', '.join(keywords_list) 
+        image_prompt = workaround_when_chatbot_refuses_to_answer(image_prompt,story_fragment)
     
     # I cannot provide information on how to create explicit content. 
     # Can I help you with something else?
@@ -608,7 +600,7 @@ def askChatGPT(text, model_engine):
     return answer  
     
  
-
+ 
 def createListOfClips(CURRENT_PROJECT_DIR):
     
     clips = []
