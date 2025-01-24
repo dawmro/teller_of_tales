@@ -68,10 +68,12 @@ FPS = int(config["GENERAL"]["FPS"])
 FRAGMENT_LENGTH = int(config["TEXT_FRAGMENT"]["FRAGMENT_LENGTH"])
 
 USE_ELEVENLABS = config["AUDIO"]["USE_ELEVENLABS"]
+ELEVENLABS_VOICE_ID = config["AUDIO"]["ELEVENLABS_VOICE_ID"]
 USING_F5_TTS = config["AUDIO"]["USING_F5_TTS"]
 VOICE = config["AUDIO"]["VOICE"]
 BG_MUSIC = config["AUDIO"]["BG_MUSIC"]
 BG_MUSIC_PATH = pathlib.Path(__file__).parent.absolute() / config["AUDIO"]["BG_MUSIC_PATH"]
+MUSIC_VOLUME = float(config["AUDIO"]["MUSIC_VOLUME"])
 
 USE_CHATGPT = config["IMAGE_PROMPT"]["USE_CHATGPT"]
 model_engine = config["IMAGE_PROMPT"]["model_engine"]
@@ -483,7 +485,7 @@ def create_elevenlabs_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
     else:
         OUTPUT_FILE_MP3 = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3"
         CHUNK_SIZE = 1024
-        url = "https://api.elevenlabs.io/v1/text-to-speech/ErXwobaYiN019PkySvjV"
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
 
         headers = {
           "Accept": "audio/mpeg",
@@ -605,9 +607,10 @@ def askChatGPT(text, model_engine):
     
     return answer  
     
-        
-def createListOfClips(CURRENT_PROJECT_DIR):
+ 
 
+def createListOfClips(CURRENT_PROJECT_DIR):
+    
     clips = []
     l_files = os.listdir(CURRENT_PROJECT_DIR+"/videos")
     l_files.sort(key=lambda f: int(re.sub('\D', '', f)))
@@ -617,13 +620,15 @@ def createListOfClips(CURRENT_PROJECT_DIR):
     #print("Files without digits:")
     #for file in no_digit_files:
     #    print(file)
-        
+    
     for file in l_files:
         clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/videos/{file}")
         clips.append(clip)
     
     return clips
 
+
+    
 
 def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
 
@@ -649,7 +654,7 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
         original_audio = final_video.audio
         soundtrack = AudioFileClip(str(BG_MUSIC_PATH))
         bg_music = soundtrack.audio_loop(duration=final_video.duration)
-        bg_music = bg_music.volumex(0.06)
+        bg_music = bg_music.volumex(MUSIC_VOLUME)
         final_audio = CompositeAudioClip([original_audio, bg_music])
         final_video = final_video.set_audio(final_audio)
     
@@ -743,7 +748,7 @@ if __name__ == "__main__":
                 cpu_usage = int(psutil.cpu_percent(interval=0.1, percpu=False))
                 while (cpu_usage > 90):
                     print(f"{showTime()} Main: High CPU usage! {cpu_usage}% -> Waiting...")
-                    cpu_usage = int(psutil.cpu_percent(interval=4.0, percpu=False))
+                    cpu_usage = int(psutil.cpu_percent(interval=2.0, percpu=False))
                 # ^^^^^^ pause / unpause
                 
                 #vvv
@@ -826,7 +831,7 @@ if __name__ == "__main__":
                 # create final video
                 final_video_process = Process(target = makeFinalVideo, args = (project_name, CURRENT_PROJECT_DIR))
                 final_video_process.start()
-                time_to_wait = int(((i/25.0)+1)*FPS)
+                time_to_wait = int(((i/17.4)+1)*FPS)
                 print(f"{showTime()} Waiting {time_to_wait} second before starting next project")
                 time.sleep(time_to_wait)
 
