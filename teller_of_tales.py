@@ -156,35 +156,97 @@ def createFolders():
         os.makedirs("videos")
 
 
+def clean_text(text: str) -> str:
+    """
+    Clean the input text by replacing special characters and formatting.
 
-def load_and_split_to_sentences(filename):
+    Args:
+        text (str): The input text to be cleaned.
 
+    Returns:
+        str: The cleaned text.
+    """
+
+    # Define a dictionary of replacements
+    replacements = {
+        'é': 'e',
+        '>':'',
+        '<':'',
+        '=':'',
+        '#':'',
+        '..': '.',
+        '“': '',
+        '”': '',
+        '-': ' ',
+        '–': ' ',
+        '—': ' ',
+        '*':'',
+        '_': '',
+        '~':'',
+        'XXXXXX':'',
+        'xxxxx':'',
+        '.....': '.',
+        '....': '.',
+        '...': ', ',
+        '…': ', ',
+        '\n\n\n': '\n',
+        '\n\n': '\n'
+    }
+
+    # Sort the replacement keys by length in descending order
+    sorted_replacements = sorted(replacements.items(), key=lambda x: len(x[0]), reverse=True)
+
+    # Apply the replacements
+    for key, value in sorted_replacements:
+        text = text.replace(key, value)
+
+    return text
+
+
+def load_and_split_to_sentences(filename: str) -> int:
+    """
+    Load a story from a file, clean and split it into sentences, and write each sentence to a separate file.
+
+    Args:
+        filename (str): The path to the file containing the story.
+
+    Returns:
+        int: The number of sentences in the story.
+    """
     # read raw story from txt file
     with open(filename, "r", encoding="utf-8") as file:
         story_raw = file.read()
-
-    # remove quotes from story 
-    # gate wotw, ares game, america stranded
-    story = story_raw.replace('é', 'e').replace('>', ' ').replace('<', ' ').replace('=', ' ').replace('#', ' ').replace('.."', '."').replace('“', '').replace('”', '').replace('-', '').replace('–', '').replace('—', '').replace('*', ' ').replace('_', '').replace('.....', '.').replace('....', '.').replace('...', '. ').replace('~', ' ').replace('*', ',').replace('\n\n\n', '\n').replace('\n\n', '\n').replace('XXXXXX', ' ').replace('XXXXXX', ' ').replace('xxxxx', ' ')#.replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('Xxx', ' ').replace('xxx', ' ').replace('X x X', ' ').replace('X x x', ' ').replace('x x x', ' ').replace('X X X', ' ').replace('X', ' ')
-    
-    # summoning america, wait is this just gate, age of memeoris, america in another world
-    #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ')
-    
-    # lucius
-    #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('    ', ' ').replace(':', '.').replace(';', '.')
-    
-    # war of worlds wells
-    #story = story_raw.replace('“', '').replace('”', '').replace('—', ' ').replace('*', ' ').replace('(1)', '').replace('(2)', '').replace('(3)', '').replace('(4)', '').replace('(5)', '').replace('(6)', '').replace('(7)', '').replace('(8)', '').replace('(9)', '').replace('_', '').replace('.....', '').replace('....', '').replace('...', '').replace('\n', ' ').replace('      ', ' ')
+        
+    # Clean the input text by replacing special characters and formatting    
+    story = clean_text(story_raw)
 
     # split story into list of sentences
     story_sentences_list = sent_tokenize(story)
-    
-    for i, story_sentence in enumerate(story_sentences_list):
+
+    # split long sentence into multiple sentences
+    new_story_sentences_list = []
+    frag_len = 3*FRAGMENT_LENGTH
+    punctuation_list = [',', ';', ':']
+    for sentence in story_sentences_list:
+        words = sentence.split()
+        if len(words) <= frag_len:
+            new_story_sentences_list.append(sentence)
+        else:
+            new_sentence = []
+            for word in words:
+                new_sentence.append(word)
+                if word[-1] in punctuation_list and len(new_sentence) > frag_len:
+                    new_story_sentences_list.append(' '.join(new_sentence))
+                    new_sentence = []
+            if new_sentence:
+                new_story_sentences_list.append(' '.join(new_sentence))
+
+    for i, story_sentence in enumerate(new_story_sentences_list):
         write_file(story_sentence, f"text/story_sentences/story_sentence{i}.txt")
     
     if DEBUG == 'yes':
         # display story enumerating through each sentence
-        for i, story_sentence in enumerate(story_sentences_list):
+        for i, story_sentence in enumerate(new_story_sentences_list):
             print( i, story_sentence)
         print("\n!!!!!!!!!!!!!!\nThis is last chance to make changes in story_sentences.txt files\n!!!!!!!!!!!!!!")
         pause()
@@ -367,6 +429,7 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once:
                     #"steps": 10,
                     "steps": 20,
                     "width": image_width,
+                    "height": image_height,
                     "height": image_height,
                     "seed": -1,
                     #"guidance_scale": "1.6",
@@ -671,7 +734,7 @@ if __name__ == "__main__":
     # sort project directiories by name
     project_names = []
     try:
-        project_names_mixed.sort(key=lambda f: int(re.sub('\D', '', f)))
+        project_names_mixed.sort(key=lambda f: int(re.sub(r'\D', '', f)))
     except:
         pass
     for project_name_mixed in project_names_mixed:
@@ -740,6 +803,7 @@ if __name__ == "__main__":
                 cpu_usage = int(psutil.cpu_percent(interval=0.1, percpu=False))
                 while (cpu_usage > 90):
                     print(f"{showTime()} Main: High CPU usage! {cpu_usage}% -> Waiting...")
+                    time.sleep(2)
                     cpu_usage = int(psutil.cpu_percent(interval=2.0, percpu=False))
                 # ^^^^^^ pause / unpause
                 
@@ -792,7 +856,7 @@ if __name__ == "__main__":
                         
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == True) and (Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
                     # do not start all image to video conversions at once
-                    time.sleep(3)
+                    time.sleep(2)
                 
                 if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
                     # generate image form prompt
@@ -814,7 +878,7 @@ if __name__ == "__main__":
                 for process in processes_list:
                     process.join() # call to ensure subsequent line (e.g. restart_program) 
                     # is not called until all processes finish
-                time.sleep(1)
+                time.sleep(3)
                 # continue on
                 print(f"{showTime()} Main: video_fragments joined, continuing on")
 
@@ -823,7 +887,7 @@ if __name__ == "__main__":
                 # create final video
                 final_video_process = Process(target = makeFinalVideo, args = (project_name, CURRENT_PROJECT_DIR))
                 final_video_process.start()
-                time_to_wait = int(((i/17.4)+1)*FPS)
+                time_to_wait = int(((i/12)+1)*FPS)
                 print(f"{showTime()} Waiting {time_to_wait} second before starting next project")
                 time.sleep(time_to_wait)
 
