@@ -403,12 +403,10 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width: int=1, image_height: 
     write_file(image_prompt, f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt") 
     
     # vvv if using pollinations generate image immediately when Prompt is ready
-    if (speedup == True) and (i%4 != 0):
+    if (True if isinstance(USE_SD_VIA_API, str) and USE_SD_VIA_API == "pollinations" else False) and (speedup == True) and (i%2 != 0):
         print(f"{showTime()} {i} Frag_to_prompt_thread: Starting immediate prompt_to_image ...")
         pollinations_thread = Process(target=prompt_to_image, args=(i, image_width, image_height, CURRENT_PROJECT_DIR, True))
         pollinations_thread.start() 
-        pollinations_thread.join()
-        print(f"{showTime()} {i} Frag_to_prompt_thread: pollinations_thread joined.")
     # ^^^ if using pollinations generate image immediately when Prompt is ready
       
       
@@ -780,7 +778,7 @@ if __name__ == "__main__":
                 for o in range(number_of_story_fragments):
                     if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{o}.txt").is_file() == False):
                         # translate fragment into prompt
-                        fragment_toPrompt(o, CURRENT_PROJECT_DIR, image_width, image_height, False)
+                        fragment_toPrompt(o, CURRENT_PROJECT_DIR, image_width, image_height, True if isinstance(SPEED_UP, str) and SPEED_UP == "yes" else False)
                         
                 # unload ollama model        
                 url = 'http://localhost:11434/api/generate'
@@ -815,21 +813,6 @@ if __name__ == "__main__":
                     time.sleep(300)
                     free_swap = int(psutil.swap_memory()[2]/1000000000)
                 #^^^
-                
-                # vvvvvv significant speedup, but needs fast CPU and more than 32GB of RAM 
-                if(SPEED_UP == 'yes'):
-                    # generate prompts in advance if using keyBERT
-                    if(USE_CHATGPT == 'no'):
-                        # stay ahead of current iteration by this many steps 
-                        steps_to_stay_ahead = 10
-                        j = i + steps_to_stay_ahead
-                        if(j < number_of_story_fragments):
-                            if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{j}.txt").is_file() == False):
-                                # translate fragment into prompt
-                                print(f"{showTime()} {j} of {number_of_story_fragments-1} preparing prompts in advance")
-                                frag_to_prompt_thread = Process(target=fragment_toPrompt, args=(j, CURRENT_PROJECT_DIR,  image_width, image_height, True if isinstance(USE_SD_VIA_API, str) and USE_SD_VIA_API == "pollinations" else False))
-                                frag_to_prompt_thread.start()                       
-                # ^^^^^^ significant speedup, but needs fast CPU and more than 32GB of RAM
 
                 # create voiceover 
                 if(Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav").is_file() == False) and (Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3").is_file() == False):
