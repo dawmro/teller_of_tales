@@ -10,7 +10,7 @@ Teller of Tales is a project that creates narrated video stories from book chapt
 
 Here is an example of a video story created by Teller of Tales: https://www.youtube.com/watch?v=-wGfmEuONqo
 
-![alt text](https://github.com/dawmro/teller_of_tales/blob/main/screenshot.png?raw=true)
+![alt text](https://github.com/dawmro/teller_of_tales/blob/main/docs/screenshot.png?raw=true)
 
 ## Components & Flow
 ### 1. File Input
