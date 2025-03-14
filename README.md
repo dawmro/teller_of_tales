@@ -43,6 +43,7 @@ sequenceDiagram
         ImageGen->>ImageFile: Save JPG
     end
 ```
+![alt text](https://github.com/dawmro/teller_of_tales/blob/main/docs/processing_pipeline.PNG?raw=true)
 
 A. Text-to-Speech (TTS)
 - Engines:
@@ -84,6 +85,7 @@ graph LR
   Compositing --> VideoClip
   end
 ```
+![alt text](https://github.com/dawmro/teller_of_tales/blob/main/docs/video_clip_creation.PNG?raw=true)
 
 - Audio Processing:
   - Crossfades
@@ -130,6 +132,7 @@ graph TD
   style E fill:#d8d
   style F fill:#a93
 ```
+![alt text](https://github.com/dawmro/teller_of_tales/blob/main/docs/dependency_graph.PNG?raw=true)
 
 ### Concurrency Model
 - Processing Mode:
@@ -157,6 +160,7 @@ graph LR
     ClipAssembly --> VideoFragments
   end
 ```
+![alt text](https://github.com/dawmro/teller_of_tales/blob/main/docs/usage_flow.PNG?raw=true)
 
 This architecture balances parallelism while preventing system overload, leveraging modern APIs and affordable cloud services where needed.
 
