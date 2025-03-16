@@ -639,7 +639,7 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
         reversed_movie_clip = movie_clip.fx(vfx.time_mirror)
         mirrored_movie_clip = concatenate_videoclips([movie_clip, reversed_movie_clip], padding=-0.2, method="compose")
         movie_clip = mirrored_movie_clip.resize( (image_width, image_height) )
-        movie_clip.write_videofile(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4", fps=FPS, codec="h264_nvenc")
+        movie_clip.write_videofile(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4", fps=FPS, codec="libx264")
         movie_clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").loop(duration = audio_duration)
 
     else:
@@ -659,7 +659,7 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
     video = CompositeVideoClip([clip, text_clip])
     
     # save Video Clip to a file
-    video_mp4 = video.write_videofile(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4", fps=FPS, codec="h264_nvenc")
+    video_mp4 = video.write_videofile(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4", fps=FPS, codec="libx264")
     print(f"{showTime()} The Video{i} Has Been Created Successfully!")
         
     
@@ -738,7 +738,7 @@ def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
         final_video = final_video.set_audio(final_audio)
     
     print(f"{showTime()} Writing final video to file...")
-    final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=FPS, codec="h264_nvenc")
+    final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=FPS, codec="libx264")
         
     print(f"{showTime()} Final video created successfully!")
 
