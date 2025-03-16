@@ -55,7 +55,6 @@ from ollama import ChatResponse
 import gc
 
 
-
 config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
 #BG_MUSIC_PATH = pathlib.Path(__file__).parent.absolute() / "bg_music/Fantasy Music - Passing the Crown - Avery Alexander (youtube).mp3"
 config = configparser.ConfigParser()
@@ -403,15 +402,15 @@ def fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width: int=1, image_height: 
     write_file(image_prompt, f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt") 
     
     # vvv if using pollinations generate image immediately when Prompt is ready
-    if (True if isinstance(USE_SD_VIA_API, str) and USE_SD_VIA_API == "pollinations" else False) and (speedup == True) and (i%2 != 0):
+    if (True if isinstance(USE_SD_VIA_API, str) and USE_SD_VIA_API == "pollinations" else False) and (speedup == True) and (i%5 == 0):
         print(f"{showTime()} {i} Frag_to_prompt_thread: Starting immediate prompt_to_image ...")
-        pollinations_thread = Process(target=prompt_to_image, args=(i, image_width, image_height, CURRENT_PROJECT_DIR, True))
+        pollinations_thread = Process(target=prompt_to_image, args=(i, image_width, image_height, CURRENT_PROJECT_DIR, True, True))
         pollinations_thread.start() 
     # ^^^ if using pollinations generate image immediately when Prompt is ready
       
       
     
-def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once: bool=False):
+def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once: bool=False, wait: bool=False):
     do_it = True
     wait_time = 10
     image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
@@ -425,7 +424,7 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once:
                     "prompt": f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}",
                     "negative_prompt": f"{negative_prompt}",
                     #"steps": 10,
-                    "steps": 20,
+                    "steps": 22,
                     "width": image_width,
                     "height": image_height,
                     "height": image_height,
@@ -470,10 +469,12 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once:
                     image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg", pnginfo=pnginfo)
                     
             elif USE_SD_VIA_API == 'pollinations':
-
+                if wait:
+                    time.sleep(i)    
+                
                 prompt = f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}"
                 #url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&model=flux&nologo=true&enhance=true&seed={time.time()}"
-                url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&nologo=true&model=flux&enhance=true&seed={time.time()}&negative=nsfw"
+                url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&nologo=true&model=flux&enhance=falsee&seed={time.time()}&negative=nsfw"
                 
                 HEADERS = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
@@ -510,9 +511,9 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once:
         except Exception as e:
             if try_once:
                 do_it = False
-                print(f"Exception!!! \n{e} \nNot trying again.")
+                print(f"Exception!!! {i} \n{e} \nNot trying again.")
             else:    
-                print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
+                print(f"Exception!!! {i} \n{e} \nWaiting for {wait_time} seconds and trying again...")
                 time.sleep(wait_time)
 
 
@@ -560,6 +561,31 @@ def create_elevenlabs_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
             for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
                 if chunk:
                     f.write(chunk)
+                    
+                    
+                    
+def create_kokoro_voiceover(i, story_fragment, CURRENT_PROJECT_DIR) -> None:
+    
+    story_fragment=story_fragment.replace("\n", " ")
+    Type="wav"
+    OUTPUT_FILE_MP3 = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.{Type}"
+    CHUNK_SIZE = 1024
+    
+    url = f"http://localhost:8880/v1/audio/speech"
+    json={
+            "model": "kokoro",
+            "input": story_fragment,
+            "voice": "af_heart+af_nicole",
+            "speed": 1.1,
+            "response_format": Type,
+            "stream": True,
+        }
+
+    response = requests.post(url=url, json=json, stream=True)
+    with open(OUTPUT_FILE_MP3, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+            if chunk:
+                f.write(chunk)                    
     
     
    
@@ -589,8 +615,8 @@ def createVideoClip(i, CURRENT_PROJECT_DIR):
     audio_clip = audio_clip.audio_fadein(0.05).audio_fadeout(0.05)
     
     silence_duration = 0.5
-    if USE_ELEVENLABS == 'yes':
-        silence_duration = 1.0
+    if USE_ELEVENLABS != 'no':
+        silence_duration = 0.7
         
     silence = AudioClip(make_frame = lambda t: 0, duration = silence_duration)
     # add 0.5 second silence to begining of audio 
@@ -820,9 +846,12 @@ if __name__ == "__main__":
                     do_it = True
                     while(do_it):
                         try: 
-                            if USE_ELEVENLABS == 'yes':
+                            if USE_ELEVENLABS == 'elevenlabs':
                                 create_elevenlabs_vioceover(story_fragment, CURRENT_PROJECT_DIR)
                                 print(f"{showTime()} Created voiceover using Elevenlabs...")
+                            elif USE_ELEVENLABS == 'kokoro':
+                                create_kokoro_voiceover(i, story_fragment, CURRENT_PROJECT_DIR)
+                                print(f"{showTime()} Created voiceover using Kokoro...")
                             else:
                                 asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment, CURRENT_PROJECT_DIR))
                                 print(f"{showTime()} Created voiceover using Edge-tts...")
@@ -831,7 +860,7 @@ if __name__ == "__main__":
                             wait_time = 10
                             print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
                             time.sleep(wait_time)
-                
+                    
                 if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt").is_file() == False):
                     # translate fragment into prompt
                     fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width, image_height, False)
@@ -861,7 +890,7 @@ if __name__ == "__main__":
                 for process in processes_list:
                     process.join() # call to ensure subsequent line (e.g. restart_program) 
                     # is not called until all processes finish
-                time.sleep(3)
+                time.sleep(10)
                 # continue on
                 print(f"{showTime()} Main: video_fragments joined, continuing on")
 
@@ -870,7 +899,7 @@ if __name__ == "__main__":
                 # create final video
                 final_video_process = Process(target = makeFinalVideo, args = (project_name, CURRENT_PROJECT_DIR))
                 final_video_process.start()
-                time_to_wait = int(((i/12)+1)*FPS)
+                time_to_wait = int(((i/10)+1)*FPS)
                 print(f"{showTime()} Waiting {time_to_wait} second before starting next project")
                 time.sleep(time_to_wait)
 
