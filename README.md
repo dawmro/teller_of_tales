@@ -8,7 +8,6 @@ Teller of Tales is a project that creates narrated video stories from book chapt
 * Text to speech with Edge Text-to-Speech or Elevenlabs
 * Video editing with MoviePy
 
-Here is an example of a video story created by Teller of Tales: https://www.youtube.com/watch?v=-wGfmEuONqo
 
 ![alt text](https://github.com/dawmro/teller_of_tales/blob/main/docs/screenshot.png?raw=true)
 
