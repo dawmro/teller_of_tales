@@ -7,9 +7,13 @@ Teller of Tales is a project that creates narrated video stories from book chapt
 * Image generation with StableDiffusion
 * Text to speech with Edge Text-to-Speech or Elevenlabs
 * Video editing with MoviePy
-
-
+  
 ![alt text](https://github.com/dawmro/teller_of_tales/blob/main/docs/screenshot.png?raw=true)
+
+## Example video output
+https://github.com/user-attachments/assets/079fa221-9822-45d7-be65-bdc7b5f2db38
+
+
 
 ## Components & Flow
 ### 1. File Input
