@@ -1,351 +1,279 @@
+
+"""
+teller_of_tales_local.py
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Turn a plain-text story into an illustrated, narrated video.
+
+Workflow:
+    1. Split the story into short fragments.
+    2. Generate an image prompt for each fragment.
+    3. Render an image with Stable-Diffusion (A1111) or Pollinations.
+    4. Synthesize speech with Edge-TTS, ElevenLabs or Kokoro.
+    5. Stitch everything into short clips and concatenate into a final MP4.
+
+The script is **project-oriented**: place each story.txt in its own directory
+under ``./projects/<project_name>/`` and run this file – everything else is
+automatic.
+
+Configuration lives in ``config.ini`` and ``characters_descriptions.ini``.
+"""
+
 # if first run then run installer 
 # import nltk
 # nltk.download()
 
-from nltk.tokenize import sent_tokenize, word_tokenize
-from datetime import datetime
-import time
-import openai
+from __future__ import annotations
+
+import asyncio
+import base64
+import configparser
+import io
 import json
+import multiprocessing
 import os
+import pathlib
 import re
-
-import torch
-
-from moviepy.editor import *
-from tqdm.auto import tqdm
-
-import fnmatch
-from pathlib import Path
+import shutil
+import time
+from datetime import datetime
+from typing import (Dict, List, Tuple)
 
 import edge_tts
-import asyncio
-
-from threading import Thread
-
-import multiprocessing
-from multiprocessing import Process
-
-# for extracting keywords
-from keybert import KeyBERT
-
-import pathlib
-import configparser
-
-from moviepy.editor import (VideoFileClip, AudioFileClip, CompositeAudioClip)
-from moviepy.audio.fx.all import volumex
-import moviepy.video.fx.all as vfx
-
-import requests
-import io
-import base64
-from PIL import Image, PngImagePlugin
-import shutil
-
+import openai
 import psutil
-
+import requests
+from concurrent.futures import ProcessPoolExecutor
 from fake_useragent import UserAgent
+from functools import lru_cache
+from keybert import KeyBERT
+from moviepy.audio.AudioClip import AudioClip
+from moviepy.audio.fx.all import volumex
+from moviepy.editor import (
+    AudioFileClip,
+    CompositeAudioClip,
+    CompositeVideoClip,
+    ImageClip,
+    TextClip,
+    VideoFileClip,
+    concatenate_audioclips,
+    concatenate_videoclips,
+)
+from nltk.tokenize import sent_tokenize, word_tokenize
+from ollama import ChatResponse, chat
+from PIL import Image, PngImagePlugin
 
-from moviepy.config import change_settings
-change_settings({"FFMPEG_BINARY":"ffmpeg"})
+# ---------- MoviePy FFMPEG override ----------
+import moviepy.config as mpy_cfg
 
-from ollama import chat
-from ollama import ChatResponse
+mpy_cfg.change_settings({"FFMPEG_BINARY": "ffmpeg"})
 
-import gc
-
-
-config_path = pathlib.Path(__file__).parent.absolute() / "config.ini"
-#BG_MUSIC_PATH = pathlib.Path(__file__).parent.absolute() / "bg_music/Fantasy Music - Passing the Crown - Avery Alexander (youtube).mp3"
+# ---------- Configuration ----------
+_CONFIG_PATH = pathlib.Path(__file__).with_name("config.ini")
 config = configparser.ConfigParser()
-config.read(config_path)
+config.read(_CONFIG_PATH, encoding="utf-8")
 
-SPLIT_TEXT_ONLY = config["GENERAL"]["SPLIT_TEXT_ONLY"]
-DEBUG = config["GENERAL"]["DEBUG"]
-SPEED_UP = config["GENERAL"]["SPEED_UP"]
-FREE_SWAP = int(config["GENERAL"]["FREE_SWAP"])
-FPS = int(config["GENERAL"]["FPS"])
+# GENERAL
+DEBUG: bool = config["GENERAL"].getboolean("DEBUG", fallback=False)
+SPEED_UP: bool = config["GENERAL"].getboolean("SPEED_UP", fallback=False)
+FREE_SWAP_GB: int = int(config["GENERAL"]["FREE_SWAP"])
+FPS: int = int(config["GENERAL"]["FPS"])
 
-FRAGMENT_LENGTH = int(config["TEXT_FRAGMENT"]["FRAGMENT_LENGTH"])
+# TEXT
+FRAGMENT_LENGTH: int = int(config["TEXT_FRAGMENT"]["FRAGMENT_LENGTH"])
 
-USE_ELEVENLABS = config["AUDIO"]["USE_ELEVENLABS"]
-ELEVENLABS_VOICE_ID = config["AUDIO"]["ELEVENLABS_VOICE_ID"]
-USING_F5_TTS = config["AUDIO"]["USING_F5_TTS"]
-VOICE = config["AUDIO"]["VOICE"]
-BG_MUSIC = config["AUDIO"]["BG_MUSIC"]
-BG_MUSIC_PATH = pathlib.Path(__file__).parent.absolute() / config["AUDIO"]["BG_MUSIC_PATH"]
-MUSIC_VOLUME = float(config["AUDIO"]["MUSIC_VOLUME"])
+# AUDIO
+TTS_PROVIDER: str = config["AUDIO"]["TTS_PROVIDER"]
+ELEVENLABS_VOICE_ID: str = config["AUDIO"]["ELEVENLABS_VOICE_ID"]
+KOKORO_VOICE_ID: str = config["AUDIO"]["KOKORO_VOICE_ID"]
+KOKORO_URL: str = config["AUDIO"]["KOKORO_URL"]
+VOICE: str = config["AUDIO"]["VOICE"]
+BG_MUSIC: bool = config["AUDIO"].getboolean("BG_MUSIC")
+BG_MUSIC_PATH: pathlib.Path = pathlib.Path(__file__).parent / config["AUDIO"]["BG_MUSIC_PATH"]
+MUSIC_VOLUME: float = float(config["AUDIO"]["MUSIC_VOLUME"])
 
-USE_CHATGPT = config["IMAGE_PROMPT"]["USE_CHATGPT"]
-model_engine = config["IMAGE_PROMPT"]["model_engine"]
-OLLAMA_MODEL = config["IMAGE_PROMPT"]["OLLAMA_MODEL"]
+# IMAGE PROMPTS
+IMAGE_PROMPT_PROVIDER: str = config["IMAGE_PROMPT"]["IMAGE_PROMPT_PROVIDER"]
+OLLAMA_MODEL: str = config["IMAGE_PROMPT"]["OLLAMA_MODEL"]
 
-seed = int(config["STABLE_DIFFUSION"]["seed"])
-image_width = int(config["STABLE_DIFFUSION"]["image_width"])
-image_height = int(config["STABLE_DIFFUSION"]["image_height"])
-possitive_prompt_prefix = config["STABLE_DIFFUSION"]["possitive_prompt_prefix"]
-possitive_prompt_sufix = config["STABLE_DIFFUSION"]["possitive_prompt_sufix"]
-negative_prompt = config["STABLE_DIFFUSION"]["negative_prompt"]
+# STABLE DIFFUSION
+POSITIVE_PREFIX: str = config["STABLE_DIFFUSION"]["positive_prompt_prefix"]
+POSITIVE_SUFFIX: str = config["STABLE_DIFFUSION"]["positive_prompt_suffix"]
+NEGATIVE_PROMPT: str = config["STABLE_DIFFUSION"]["negative_prompt"]
+USE_SD_API: str = config["STABLE_DIFFUSION"]["USE_SD_VIA_API"]
+SD_URL: str = config["STABLE_DIFFUSION"]["SD_URL"]
+SEED: int = int(config["STABLE_DIFFUSION"]["seed"])
+IMAGE_WIDTH: int = int(config["STABLE_DIFFUSION"]["image_width"])
+IMAGE_HEIGHT: int = int(config["STABLE_DIFFUSION"]["image_height"])
 
-USE_SD_VIA_API = config["STABLE_DIFFUSION"]["USE_SD_VIA_API"]
-SD_URL = config["STABLE_DIFFUSION"]["SD_URL"]
+USE_CHAR_DESC: bool = config["STABLE_DIFFUSION"].getboolean("USE_CHARACTERS_DESCRIPTIONS")
+CHAR_DESC: Dict[str, str] = {}
+if USE_CHAR_DESC:
+    _CHAR_DESC_PATH = pathlib.Path(__file__).with_name("characters_descriptions.ini")
+    if _CHAR_DESC_PATH.exists():
+        _cd = configparser.ConfigParser()
+        _cd.read(_CHAR_DESC_PATH, encoding="utf-8")
+        CHAR_DESC = dict(_cd["CHARACTERS_DESCRIPTIONS"])
 
-USE_CHARACTERS_DESCRIPTIONS = config["STABLE_DIFFUSION"]["USE_CHARACTERS_DESCRIPTIONS"]
-# descriptions should help maintain a consistent appearance of generated characters
-if USE_CHARACTERS_DESCRIPTIONS == 'yes':
-    CHARACTERS_DESCRIPTIONS = None
-    char_desc_path = pathlib.Path(__file__).parent.absolute() / "characters_descriptions.ini"
-  
-    if os.path.exists(char_desc_path):
-        char_desc = configparser.ConfigParser()
-        char_desc.read(char_desc_path)
-        if not char_desc["CHARACTERS_DESCRIPTIONS"]:
-            CHARACTERS_DESCRIPTIONS = None
-        else:
-            CHARACTERS_DESCRIPTIONS = dict(char_desc["CHARACTERS_DESCRIPTIONS"])
-   
-    
-if USE_ELEVENLABS == 'yes':
-    # Use ELEVENLABS_API_KEY imported from environment variables
-    ELEVENLABS_API_KEY = os.environ['ELEVENLABS_API_KEY']
+# API keys from environment
+if TTS_PROVIDER == "elevenlabs":
+    openai.api_key = os.environ["ELEVENLABS_API_KEY"]
 
-if USE_CHATGPT == 'yes':
-    # Use API_KEY imported from environment variables
-    openai.api_key = os.environ['OPENAI_TOKEN']
-      
-                
-def write_file(file_content, filename):
-    if DEBUG == 'yes':
-        print("Started writing file_content data into a file")
-    with open(filename, "w", encoding='utf-8') as fp:
-        fp.write(file_content)
-        if DEBUG == 'yes':
-            print("Done file_content data into a file")
-        
-        
-def read_file(filename):
-    with open(filename, "r", encoding='utf-8') as fp:
-        file_content = fp.read()
-        return file_content
-    
+if IMAGE_PROMPT_PROVIDER == "chatgpt":
+    openai.api_key = os.environ["OPENAI_TOKEN"]
 
-def showTime():
-    return str("["+datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')+" UTC]")
+# ---------- Utilities ----------
+_TIMESTAMP_FMT = "[%Y-%m-%d %H:%M:%S UTC]"
 
 
-def pause():
-    programPause = input("Press the <ENTER> key to continue...")
-    
-    
-def createFolders():
-    
-    if not os.path.exists("text"):
-        os.makedirs("text") 
-    if not os.path.exists("text/story_sentences"):
-        os.makedirs("text/story_sentences") 
-    if not os.path.exists("text/story_fragments"):
-        os.makedirs("text/story_fragments") 
-    if not os.path.exists("text/image_prompts"):
-        os.makedirs("text/image_prompts") 
-    if not os.path.exists("audio"):
-        os.makedirs("audio")         
-    if not os.path.exists("images"):
-        os.makedirs("images")     
-    if not os.path.exists("videos"):
-        os.makedirs("videos")
+def _log(msg: str) -> None:
+    """Print timestamped message when DEBUG=True."""
+    if DEBUG:
+        print(f"{datetime.utcnow().strftime(_TIMESTAMP_FMT)}  {msg}")
 
 
+def _write_text(path: pathlib.Path, text: str) -> None:
+    """Atomic write with UTF-8 encoding."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _read_text(path: pathlib.Path) -> str:
+    """Read UTF-8 file."""
+    return path.read_text(encoding="utf-8")
+
+
+# ---------- Text Processing ----------
 def clean_text(text: str) -> str:
-    """
-    Clean the input text by replacing special characters and formatting.
-
-    Args:
-        text (str): The input text to be cleaned.
-
-    Returns:
-        str: The cleaned text.
-    """
-
-    # Define a dictionary of replacements
-    replacements = {
-        'é': 'e',
-        '>':'',
-        '<':'',
-        '=':'',
-        '#':'',
-        '..': '.',
-        '“': '',
-        '”': '',
-        '-': ' ',
-        '–': ' ',
-        '—': ' ',
-        '*':'',
-        '_': '',
-        '~':'',
-        'XXXXXX':'',
-        'xxxxx':'',
-        '.....': '.',
-        '....': '.',
-        '...': ', ',
-        '…': ', ',
-        '\n\n\n': '\n',
-        '\n\n': '\n'
+    """Normalize punctuation, quotes and dashes."""
+    mapping = {
+        "é": "e",
+        ">": "",
+        "<": "",
+        "=": "",
+        "#": "",
+        "..": ".",
+        "“": "",
+        "”": "",
+        "-": " ",
+        "–": " ",
+        "—": " ",
+        "*": "",
+        "_": "",
+        "~": "",
+        "XXXXXX": "",
+        "xxxxx": "",
+        ".....": ".",
+        "....": ".",
+        "...": ", ",
+        "…": ", ",
+        "\n\n\n": "\n",
+        "\n\n": "\n",
     }
-
-    # Sort the replacement keys by length in descending order
-    sorted_replacements = sorted(replacements.items(), key=lambda x: len(x[0]), reverse=True)
-
-    # Apply the replacements
-    for key, value in sorted_replacements:
-        text = text.replace(key, value)
-
+    for k, v in sorted(mapping.items(), key=lambda kv: len(kv[0]), reverse=True):
+        text = text.replace(k, v)
     return text
 
 
-def load_and_split_to_sentences(filename: str) -> int:
+def load_and_split_to_sentences(story_path: pathlib.Path) -> int:
     """
-    Load a story from a file, clean and split it into sentences, and write each sentence to a separate file.
+    Split *story.txt* into sentences and write into
+    ``text/story_sentences/story_sentence{idx}.txt``.
 
-    Args:
-        filename (str): The path to the file containing the story.
-
-    Returns:
-        int: The number of sentences in the story.
+    Returns the number of sentence files created.
     """
-    # read raw story from txt file
-    with open(filename, "r", encoding="utf-8") as file:
-        story_raw = file.read()
-        
-    # Clean the input text by replacing special characters and formatting    
-    story = clean_text(story_raw)
+    raw = story_path.read_text(encoding="utf-8")
+    raw = clean_text(raw)
+    sentences = sent_tokenize(raw)
 
-    # split story into list of sentences
-    story_sentences_list = sent_tokenize(story)
-
-    # split long sentence into multiple sentences
-    new_story_sentences_list = []
-    frag_len = 3*FRAGMENT_LENGTH
+    # split long sentences at selected puntuations
     punctuation_list = [',', ';', ':']
-    for sentence in story_sentences_list:
-        words = sentence.split()
-        if len(words) <= frag_len:
-            new_story_sentences_list.append(sentence)
+    new_sentences: List[str] = []
+    frag_len = 3*FRAGMENT_LENGTH
+    for sent in sentences:
+        words = sent.split()
+        if len(words) <= FRAGMENT_LENGTH:
+            new_sentences.append(sent)
         else:
-            new_sentence = []
+            part = []
             for word in words:
-                new_sentence.append(word)
-                if word[-1] in punctuation_list and len(new_sentence) > frag_len:
-                    new_story_sentences_list.append(' '.join(new_sentence))
-                    new_sentence = []
-            if new_sentence:
-                new_story_sentences_list.append(' '.join(new_sentence))
+                part.append(word)
+                if word[-1] in punctuation_list and len(part) > frag_len:
+                    new_sentences.append(' '.join(part))
+                    part = []
+            if part:
+                new_sentences.append(" ".join(part))
 
-    for i, story_sentence in enumerate(new_story_sentences_list):
-        write_file(story_sentence, f"text/story_sentences/story_sentence{i}.txt")
-    
-    if DEBUG == 'yes':
-        # display story enumerating through each sentence
-        for i, story_sentence in enumerate(new_story_sentences_list):
-            print( i, story_sentence)
-        print("\n!!!!!!!!!!!!!!\nThis is last chance to make changes in story_sentences.txt files\n!!!!!!!!!!!!!!")
-        pause()
-    
-    dir_path = r'text/story_sentences'
-    number_of_files = len(fnmatch.filter(os.listdir(dir_path), 'story_sentence*.txt'))
-    print('number_of_files:', number_of_files)
-    
-    return number_of_files
+    for idx, sent in enumerate(new_sentences):
+        _write_text(story_path.parent / f"text/story_sentences/story_sentence{idx}.txt", sent)
+
+    _log(f"Created {len(new_sentences)} sentence files.")
+    return len(new_sentences)
 
 
+def sentences_to_fragments(num_sentences: int, project_dir: pathlib.Path) -> int:
+    """
+    Group consecutive sentences into fragments of at least *FRAGMENT_LENGTH* words
+    and write to ``text/story_fragments/``.
+    """
+    fragments: List[str] = []
+    current_words: List[str] = []
 
-def sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH):
+    for i in range(num_sentences):
+        sentence = _read_text(project_dir / f"text/story_sentences/story_sentence{i}.txt")
+        current_words.extend(sentence.split())
+        if len(current_words) > FRAGMENT_LENGTH:
+            fragments.append(" ".join(current_words))
+            current_words = []
 
-    # story divided into fragments
-    story_fragments = []
+    if current_words:
+        fragments.append(" ".join(current_words))
 
-    # fragment currently being worked on
-    current_fragment = None
+    for idx, frag in enumerate(fragments):
+        _write_text(project_dir / f"text/story_fragments/story_fragment{idx}.txt", frag)
 
-    # current fragment word counter
-    current_fragment_word_counter = 0
+    _log(f"Created {len(fragments)} fragment files.")
+    return len(fragments)
 
-    # for every sentence in list of sentences
-    # combine sentences form story into fragments
-    for i in range(number_of_story_sentences):
+
+# ---------- Image Prompt Generation ----------
+def _unload_ollama() -> None:    
+    if IMAGE_PROMPT_PROVIDER == "ollama":
+        url = 'http://localhost:11434/api/generate'
+        data = {'model': OLLAMA_MODEL, 'keep_alive': 0}
+        response = requests.post(url, json=data)
+        print(response.text)
+        time.sleep(3)
         
-        # load current sentence
-        story_sentence = read_file(f"text/story_sentences/story_sentence{i}.txt")
         
-        # insert story sentence if current fragment is empty
-        if current_fragment == None:
-            current_fragment = story_sentence   
-            
-        # add story sentence to current fragment    
-        else:
-            current_fragment += ' ' + story_sentence
-            
-        # get amount of words in fragment    
-        current_fragment_word_counter = len(word_tokenize(current_fragment))
-        
-        # if minimal length requirement is meet
-        if current_fragment_word_counter > FRAGMENT_LENGTH:
-            if DEBUG == 'yes':
-                print(current_fragment_word_counter)
-        
-            # add current fragment to story fragments
-            story_fragments.append(current_fragment)
-            
-            # zero temporary variables
-            current_fragment = None
-            current_fragment_word_counter = 0
-     
-    # add last fragment 
-    if current_fragment is not None:
-        story_fragments.append(current_fragment)
-    
-    for i, story_fragment in enumerate(story_fragments):
-        write_file(story_fragment, f"text/story_fragments/story_fragment{i}.txt")
-    
-    if DEBUG == 'yes':
-        # display story enumerating through each sentence
-        for i, story_fragment in enumerate(story_fragments):
-            print( i, story_fragment)
-        print("\n!!!!!!!!!!!!!!\nThis is last chance to make changes in story_fragments.txt files\n!!!!!!!!!!!!!!")
-        pause()
-        
-    dir_path = r'text/story_fragments'
-    number_of_files = len(fnmatch.filter(os.listdir(dir_path), 'story_fragment*.txt'))
-    print('number_of_files:', number_of_files)
-    
-    return number_of_files
-    
-    
-    
-def check_for_characters(story_fragment, char_desc_dict):
-    matched_chars = []
-    for name, desc in char_desc_dict.items():
-        pattern = r'(?i)\b(' + name + r')\b'
-        match = re.search(pattern, story_fragment)
-        if match:
-            matched_chars.append((name, desc))
-            break  # Stop the loop after finding the first match
-            
-    result = ''
-    if matched_chars:
-        result = ', '.join([desc for _, desc in matched_chars])
-        result = "[[[ " + result + " ]]]"
-        result += ', '
-        
-    return result
+def _reload_ollama() -> None:    
+    if IMAGE_PROMPT_PROVIDER == "ollama":
+        url = 'http://localhost:11434/api/generate'
+        data = {'model': OLLAMA_MODEL, 'keep_alive': 1}
+        response = requests.post(url, json=data)
+        print(response.text)
+        time.sleep(3)
 
 
+def _find_characters(fragment: str) -> str:
+    """Return comma-separated character descriptions if any character is mentioned."""
+    for name, desc in CHAR_DESC.items():
+        if re.search(rf"\b{name}\b", fragment, flags=re.IGNORECASE):
+            return f"[[[ {desc} ]]], "
+    return ""
 
 
-def workaround_when_chatbot_refuses_to_answer(image_prompt: str, story_fragment: str):
+@lru_cache(maxsize=1)
+def _get_kw_model() -> KeyBERT:
+    return KeyBERT("all-mpnet-base-v2")
+
+
+def _keywords_fallback(fragment: str) -> str:
+    """Use KeyBERT when LLM refuses prompt generation."""
+    kw_model = _get_kw_model()
     ngram_range = (1, 8)
-    kw_model = KeyBERT(model='all-mpnet-base-v2')
     keywords = kw_model.extract_keywords(
-        story_fragment,
+        fragment,
         keyphrase_ngram_range=ngram_range, 
         stop_words='english', 
         highlight=False,
@@ -358,143 +286,125 @@ def workaround_when_chatbot_refuses_to_answer(image_prompt: str, story_fragment:
     gc.collect()
     image_prompt = ', '.join(keywords_list)
     return image_prompt
-
-
-
-
-def fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width: int=1, image_height: int=1, speedup: bool=False):
-    story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
-    print(f"{i} Fragment: {story_fragment}")
     
-    # probably needs some improvements
-    prefix = f"You are an expert in crafting intricate prompts for the generative AI 'Stable Diffusion XL'. Create a prompt that does not conflict with the following style and setting of the story: {possitive_prompt_sufix}. Respond only with image prompt and nothing else. Suggest good image prompt to illustrate the following fragment from story, make description illustrative, precise and detailed, one sentence, max 20 words: "
-    
-    if USE_CHATGPT == 'yes':
-       
-        # translate fragment into prompt
-        image_prompt = askChatGPT(prefix + story_fragment, model_engine).strip()
-        
-    elif USE_CHATGPT == 'ollama':
-        
-        # translate fragment into prompt 
-        response: ChatResponse = chat(model=OLLAMA_MODEL, messages=[
-            {
-                'role': 'user',
-                'content': prefix + story_fragment,
-            },
-        ])
-        image_prompt = (response['message']['content']).replace("“", '').replace("”", '').replace("‘", "'").replace("’", "'").replace('"', '')
-            
+
+def build_image_prompt(fragment: str) -> str:
+    """Generate an SD prompt for the given fragment."""
+    prompt_instruction = (
+        "You are an expert prompt writer for Stable-Diffusion-XL. "
+        f"Style context: {POSITIVE_SUFFIX}. "
+        "Describe the scene in a single sentence, max 20 words. "
+        "Do NOT include any explanations or quotes."
+    )
+
+    if IMAGE_PROMPT_PROVIDER == "chatgpt":
+        try:
+            response = openai.Completion.create(
+                engine="text-davinci-003",
+                prompt=f"{prompt_instruction}\n{fragment}",
+                max_tokens=40,
+                temperature=0.9,
+            )
+            prompt = response.choices[0].text.strip()
+                
+        except Exception as e:
+            _log(f"ChatGPT failed: {e}. Using KeyBERT fallback.")
+            prompt = _keywords_fallback(fragment)
+
+    elif IMAGE_PROMPT_PROVIDER == "ollama":
+        try:
+            resp: ChatResponse = chat(
+                model=OLLAMA_MODEL,
+                messages=[{"role": "user", "content": f"{prompt_instruction}\n{fragment}"}],
+            )
+            prompt = resp["message"]["content"].strip()
+            _log(prompt)
+                
+        except Exception as e:
+            _log(f"Ollama failed: {e}. Using KeyBERT fallback.")
+            prompt = _keywords_fallback(fragment)
+
     else:
-        image_prompt = workaround_when_chatbot_refuses_to_answer(image_prompt,story_fragment)
+        prompt = _keywords_fallback(fragment)
+
+    if any(x in prompt.lower() for x in ("i cannot", "?")):
+        prompt = _keywords_fallback(fragment)
+
+    if CHAR_DESC:
+        prompt = _find_characters(fragment) + prompt
+
+    return prompt
+
+
+# ---------- Image Generation ---------- 
+def _unload_sd() -> None:
+    if USE_SD_API == "yes":
+        response = requests.post(url=f"{SD_URL}/sdapi/v1/unload-checkpoint", json={})
+        print(response.text)
+        time.sleep(3)
     
-    # I cannot provide information on how to create explicit content. 
-    # Can I help you with something else?
-    if any(phrase in image_prompt for phrase in ["I can", "?"]):
-        print("Chatbot refuses to answer, using KeyBERT instead")
-        image_prompt = workaround_when_chatbot_refuses_to_answer(image_prompt,story_fragment)
-        
-    if USE_CHARACTERS_DESCRIPTIONS == 'yes':    
-        if CHARACTERS_DESCRIPTIONS != None:
-            image_prompt = f"{check_for_characters(story_fragment, CHARACTERS_DESCRIPTIONS)}{image_prompt}"
-           
-    print(f"{i} Created Prompt: {image_prompt}")
-    write_file(image_prompt, f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt") 
+
+def _reload_sd() -> None:
+    if USE_SD_API == "yes":
+        response = requests.post(url=f"{SD_URL}/sdapi/v1/reload-checkpoint", json={})
+        print(response.text)
+        time.sleep(3)
+
+
+def _sd_api_payload(prompt: str) -> dict:
+    """Return A1111 API payload for txt2img."""
+    return {
+        "prompt": f"{POSITIVE_PREFIX} {prompt} {POSITIVE_SUFFIX}",
+        "negative_prompt": NEGATIVE_PROMPT,
+        "steps": 20,
+        "width": IMAGE_WIDTH,
+        "height": IMAGE_HEIGHT,
+        "seed": SEED,
+        "guidance_scale": 4.0,
+        "sampler_index": "Euler a",
+    }
+
+
+def generate_image(idx: int, project_dir: pathlib.Path) -> None:
+    """Generate image for fragment *idx*."""
+    prompt_path = project_dir / f"text/image_prompts/image_prompt{idx}.txt"
+    image_path = project_dir / f"images/image{idx}.jpg"
+    if image_path.exists():
+        return
+
+    prompt = _read_text(prompt_path)
     
-    # vvv if using pollinations generate image immediately when Prompt is ready
-    if (True if isinstance(USE_SD_VIA_API, str) and USE_SD_VIA_API == "pollinations" else False) and (speedup == True) and (i%5 == 0):
-        print(f"{showTime()} {i} Frag_to_prompt_thread: Starting immediate prompt_to_image ...")
-        pollinations_thread = Process(target=prompt_to_image, args=(i, image_width, image_height, CURRENT_PROJECT_DIR, True, True))
-        pollinations_thread.start() 
-    # ^^^ if using pollinations generate image immediately when Prompt is ready
-      
-      
-    
-def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once: bool=False, wait: bool=False):
+    _log(f"{idx} Loaded Prompt: {prompt}")
     do_it = True
     wait_time = 10
-    image_prompt = read_file(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt")
-    print(f"{i} Loaded Prompt: {image_prompt}")
+    
     while(do_it):
         try:
-            if USE_SD_VIA_API == 'yes':
+            if USE_SD_API == "yes":
                 url = SD_URL
-
-                payload = {
-                    "prompt": f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}",
-                    "negative_prompt": f"{negative_prompt}",
-                    #"steps": 10,
-                    "steps": 22,
-                    "width": image_width,
-                    "height": image_height,
-                    "height": image_height,
-                    "seed": -1,
-                    #"guidance_scale": "1.6",
-                    "guidance_scale": "4.0",
-                    #"sampler_index": "DPM++ 2M SDE Karras",
-                    #"sampler_index": "DPM++ 3M SDE Exponential",
-                    #"sampler_index": "DPM++ 2M Karras",
-                    "sampler_index": "Euler a",
-                    #"sampler_index": "DPM++ 3M SDE Karras",
-                    #"sampler_index": "DPM++ SDE",
-                    
-                }
-                
+                payload = _sd_api_payload(prompt)
                 option_payload = {
-                    #"sd_model_checkpoint": "animagineXLV31_v31.safetensors",
-                    #"sd_model_checkpoint": "dreamshaperXL10_alpha2Xl10.safetensors [0f1b80cfe8]",
-                    #"sd_model_checkpoint": "animeArtDiffusionXL_alpha3.safetensors",
                     "sd_model_checkpoint": "aamXLAnimeMix_v10.safetensors",
-                    #"sd_model_checkpoint": "sdxlUnstableDiffusers_v11Rundiffusion.safetensors",
-                    #"sd_model_checkpoint": "lomoxl_.safetensors",
-                    #"sd_model_checkpoint": "sdxlYamersAnime_stageAnima.safetensors",
                     "sd_vae": "sdxl_vae.safetensors",
                 }
-                
-                requests.post(url=f"{url}/sdapi/v1/options", json=option_payload)
-                response = requests.post(url=f'{url}/sdapi/v1/txt2img', json=payload)
+                requests.post(f"{url}/sdapi/v1/options", json=option_payload)
+                r = requests.post(f"{url}/sdapi/v1/txt2img", json=payload).json()
 
-                r = response.json()
-                
-                for j in r['images']:
-                    image = Image.open(io.BytesIO(base64.b64decode(j.split(",",1)[0])))
+                for b64 in r["images"]:
+                    img = Image.open(io.BytesIO(base64.b64decode(b64.split(",", 1)[0])))
+                    info = PngImagePlugin.PngInfo()
+                    info.add_text("parameters", r.get("info", ""))
+                    img.save(image_path, pnginfo=info)
 
-                    png_payload = {
-                        "image": "data:image/png;base64," + j
-                    }
-                    response2 = requests.post(url=f'{url}/sdapi/v1/png-info', json=png_payload)
-
-                    pnginfo = PngImagePlugin.PngInfo()
-                    pnginfo.add_text("parameters", response2.json().get("info"))
-                    image.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg", pnginfo=pnginfo)
-                    
-            elif USE_SD_VIA_API == 'pollinations':
-                if wait:
-                    time.sleep(i)    
-                
-                prompt = f"{possitive_prompt_prefix} {image_prompt} {possitive_prompt_sufix}"
-                #url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&model=flux&nologo=true&enhance=true&seed={time.time()}"
-                url = f"https://image.pollinations.ai/prompt/{prompt}?width={image_width}&height={image_height}&nologo=true&model=flux&enhance=falsee&seed={time.time()}&negative=nsfw"
-                
-                HEADERS = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:98.0) Gecko/20100101 Firefox/98.0",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-                    "Accept-Language": "en-US,en;q=0.5",
-                    "Accept-Encoding": "gzip, deflate",
-                    "Connection": "keep-alive",
-                    "Upgrade-Insecure-Requests": "1",
-                    "Sec-Fetch-Dest": "document",
-                    "Sec-Fetch-Mode": "navigate",
-                    "Sec-Fetch-Site": "none",
-                    "Sec-Fetch-User": "?1",
-                    "Cache-Control": "max-age=0",
-                }
-                
+            elif USE_SD_API == "pollinations":
                 ua = UserAgent()
-                HEADERS["User-Agent"] = ua.random
- 
-                response = requests.get(url=url, headers=HEADERS, timeout=60)
-                print(f"{showTime()} {i}: {response.text[:100]}")
+                url = (
+                    f"https://image.pollinations.ai/prompt/{prompt.replace(' ', '%20')}"
+                    f"?width={IMAGE_WIDTH}&height={IMAGE_HEIGHT}&nologo=true&model=flux&enhance=false"
+                    f"&seed={time.time()}&negative=nsfw"
+                )
+                response = requests.get(url, headers={"User-Agent": ua.random}, timeout=60)
+                _log(f"{idx}: {response.text[:100]}")
                 if response.status_code == 200:
                     image = io.BytesIO(response.content)
                     img = Image.open(image)
@@ -511,524 +421,215 @@ def prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR, try_once:
         except Exception as e:
             if try_once:
                 do_it = False
-                print(f"Exception!!! {i} \n{e} \nNot trying again.")
+                _log(f"Exception!!! {idx} \n{e} \nNot trying again.")
             else:    
-                print(f"Exception!!! {i} \n{e} \nWaiting for {wait_time} seconds and trying again...")
+                _log(f"Exception!!! {idx} \n{e} \nWaiting for {wait_time} seconds and trying again...")
                 time.sleep(wait_time)
 
 
-async def create_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
-    
-    TEXT = story_fragment
-    OUTPUT_FILE = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav"
-    communicate = edge_tts.Communicate(TEXT, VOICE)
-    await communicate.save(OUTPUT_FILE)
-        
-        
-def create_elevenlabs_vioceover(story_fragment, CURRENT_PROJECT_DIR) -> None:
-    
-    # check subscription status
-    url = "https://api.elevenlabs.io/v1/user/subscription"
-    headers = {"xi-api-key": ELEVENLABS_API_KEY}
-    response = requests.request("GET", url, headers=headers)
-    char_count = json.loads(response.text)['character_count']
-    char_limit = json.loads(response.text)['character_limit']
-    if (char_limit - char_count) < 500:
-        raise ValueError(f"{char_limit - char_count} Characters remaining, renew your Elevenlabs subscription!")
-    
-    else:
-        OUTPUT_FILE_MP3 = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3"
-        CHUNK_SIZE = 1024
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
 
-        headers = {
+# ---------- TTS ----------
+async def tts_edge(text: str, out: pathlib.Path) -> None:
+    """Edge-TTS voice-over."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    com = edge_tts.Communicate(text, VOICE)
+    await com.save(str(out))
+
+
+def tts_elevenlabs(text: str, out: pathlib.Path) -> None:
+    """ElevenLabs voice-over."""
+    url = "https://api.elevenlabs.io/v1/user/subscription"
+    
+    headers = {
           "Accept": "audio/mpeg",
           "Content-Type": "application/json",
           "xi-api-key": ELEVENLABS_API_KEY
         }
         
-        data = {
-          "text": story_fragment,
-          "model_id": "eleven_multilingual_v2",
-          "voice_settings": {
-            "stability": 0.5,
-            "similarity_boost": 0.75
-          }
-        }
+    usage = requests.get(url, headers=headers).json()
+    if usage["character_limit"] - usage["character_count"] < len(text)+1:
+        raise RuntimeError(f"ElevenLabs character limit almost exceeded! Characters left: {usage['character_count']}")
 
-        response = requests.post(url, json=data, headers=headers)
-        with open(OUTPUT_FILE_MP3, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                if chunk:
-                    f.write(chunk)
-                    
-                    
-                    
-def create_kokoro_voiceover(i, story_fragment, CURRENT_PROJECT_DIR) -> None:
-    
-    story_fragment=story_fragment.replace("\n", " ")
-    Type="wav"
-    OUTPUT_FILE_MP3 = f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.{Type}"
-    CHUNK_SIZE = 1024
-    
-    url = f"http://localhost:8880/v1/audio/speech"
-    json={
+    tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+    payload = {
+        "text": text,
+        "model_id": "eleven_multilingual_v2",
+        "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+    }
+    resp = requests.post(tts_url, json=payload, headers=headers)
+    resp.raise_for_status()
+    with open(out, "wb") as f:
+        for chunk in resp.iter_content(chunk_size=1024):
+            f.write(chunk)
+
+
+def tts_kokoro(text: str, out: pathlib.Path) -> None:
+    """Kokoro voice-over."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    resp = requests.post(
+        KOKORO_URL,
+        json={
             "model": "kokoro",
-            "input": story_fragment,
-            "voice": "af_heart+af_nicole",
-            "speed": 1.1,
-            "response_format": Type,
+            "input": text.lower(),
+            "voice": KOKORO_VOICE_ID,
+            "speed": 1.0,
+            "response_format": "wav",
             "stream": True,
-        }
+        },
+        stream=True,
+    )
+    resp.raise_for_status()
+    with open(out, "wb") as f:
+        shutil.copyfileobj(resp.raw, f)
 
-    response = requests.post(url=url, json=json, stream=True)
-    with open(OUTPUT_FILE_MP3, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-            if chunk:
-                f.write(chunk)                    
-    
-    
-   
-def createVideoClip(i, CURRENT_PROJECT_DIR):
 
-    story_fragment = read_file(f"{CURRENT_PROJECT_DIR}/text/story_fragments/story_fragment{i}.txt")
+# ---------- Video Assembly ----------
+def create_video_clip(idx: int, project_dir: pathlib.Path) -> None:
+    """Combine image/audio into a 2-second padded clip."""
+    frag_path = project_dir / f"text/story_fragments/story_fragment{idx}.txt"
+    img_path = project_dir / f"images/image{idx}.jpg"
+    audio_wav = project_dir / f"audio/voiceover{idx}.wav"
+    audio_mp3 = project_dir / f"audio/voiceover{idx}.mp3"
 
-    # load the audio file using moviepy
-    try:
-        audio_clip = AudioFileClip(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3")
-    except:
-        audio_clip = AudioFileClip(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav")
-    
-    # FIX: 
-    # ffmepg incorrectly reporting the duration of the audio.
-    # This causes iter_chunks in AudioClip to try to read frames outside the length of the file. 
-    # In FFMPEG_AudioReader get_frame reads the end of the file again, resulting in a glitch.
-    # Cut 0.05 from the end to remove glitch
-    # Note: using ffmpeg 6.0 instead of default 4.2.2 from imageio_ffmpeg could be possible fix, 
-    # it also reduces metalic noise in audio.
-    if USING_F5_TTS == "yes":
-        audio_clip = audio_clip.subclip(0, audio_clip.duration - 0.5)
-    else:
-        audio_clip = audio_clip.subclip(0, audio_clip.duration - 0.1)
-    
-    # add audio fadein / fadeout ot minimize sound glitches
+    audio_clip = AudioFileClip(str(audio_mp3 if audio_mp3.exists() else audio_wav))
+    audio_clip = audio_clip.subclip(0, audio_clip.duration - 0.1)  # fix glitch
     audio_clip = audio_clip.audio_fadein(0.05).audio_fadeout(0.05)
-    
-    silence_duration = 0.5
-    if USE_ELEVENLABS != 'no':
-        silence_duration = 0.7
-        
-    silence = AudioClip(make_frame = lambda t: 0, duration = silence_duration)
-    # add 0.5 second silence to begining of audio 
-    audio_clip = concatenate_audioclips([silence, audio_clip])
-    # add 0.5 second silence to end of audio
-    audio_clip = concatenate_audioclips([audio_clip, silence])
-    
-    # get audio duration
-    audio_duration = audio_clip.duration
-    
-    # use short video clips instead of images (making final video trully animated)
-    # example: animate generated imageX.jpg files using pikalabs and save them in images
-    # directory as movieX.mp4 files
-    if(Path(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").is_file() == True):
-        movie_clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").loop(duration = audio_duration)
-        
-    elif(Path(f"{CURRENT_PROJECT_DIR}/images/movie{i}.mp4").is_file() == True):
-        # load movie fragment file using moviepy
-        movie_clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/images/movie{i}.mp4")
-        reversed_movie_clip = movie_clip.fx(vfx.time_mirror)
-        mirrored_movie_clip = concatenate_videoclips([movie_clip, reversed_movie_clip], padding=-0.2, method="compose")
-        movie_clip = mirrored_movie_clip.resize( (image_width, image_height) )
-        movie_clip.write_videofile(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4", fps=FPS, codec="libx264")
-        movie_clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").loop(duration = audio_duration)
+    audio_clip = concatenate_audioclips(
+        [
+            AudioClip(lambda t: 0, duration=0.5),
+            audio_clip,
+            AudioClip(lambda t: 0, duration=0.5),
+        ]
+    )
 
+    image_clip = ImageClip(str(img_path)).set_duration(audio_clip.duration)
+
+    # Text overlay
+    txt_clip = TextClip(
+        _read_text(frag_path),
+        fontsize=int(0.06 * IMAGE_HEIGHT),
+        font="Impact",
+        color="black",
+        stroke_color="white",
+        stroke_width=round(0.0026 * IMAGE_HEIGHT, 1),
+        size=(IMAGE_WIDTH, IMAGE_HEIGHT),
+        method="caption",
+        align="South",
+    ).set_duration(audio_clip.duration)
+
+    video = CompositeVideoClip([image_clip.set_audio(audio_clip), txt_clip])
+    out = project_dir / f"videos/video{idx}.mp4"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    video.write_videofile(str(out), fps=FPS, codec="libx264", logger=None)
+    _log(f"Video {idx} done.")
+
+
+def concat_clips(project_dir: pathlib.Path) -> List[VideoFileClip]:
+    """Return sorted list of VideoFileClip objects."""
+    files = sorted(project_dir.glob("videos/video*.mp4"), key=lambda p: int(p.stem[5:]))
+    print(files)
+    return [VideoFileClip(str(f)) for f in files]
+
+
+def make_final_video(project_name: str, project_dir: pathlib.Path) -> None:
+    """Concatenate all clips, add background music, write final MP4."""
+    clips = concat_clips(project_dir)
+    clips = [c.crossfadein(1.0).crossfadeout(1.0) for c in clips]
+    final = concatenate_videoclips(clips, padding=-1, method="compose")
+
+    if BG_MUSIC:
+        bg = AudioFileClip(str(BG_MUSIC_PATH)).audio_loop(duration=final.duration)
+        bg = volumex(bg, MUSIC_VOLUME)
+        final = final.set_audio(CompositeAudioClip([final.audio, bg]))
+
+    out = project_dir / f"{project_name}.mp4"
+    final.write_videofile(str(out), fps=FPS, codec="libx264")
+    _log("Final video created successfully.")
+
+
+# ---------- Main Orchestrator ----------
+def run_project(project_dir: pathlib.Path) -> None:
+    """Process a single project directory end-to-end."""
+    story_file = project_dir / "story.txt"
+    if not story_file.exists():
+        _log(f"No story.txt in {project_dir}")
+        return
+
+    # Ensure folder layout
+    for sub in ("text", "audio", "images", "videos"):
+        (project_dir / sub).mkdir(parents=True, exist_ok=True)
+
+    # Split text
+    sent_dir = project_dir / "text/story_sentences"
+    frag_dir = project_dir / "text/story_fragments"
+    if not any(frag_dir.glob("*")):
+        num_sentences = load_and_split_to_sentences(story_file)
+        num_frags = sentences_to_fragments(num_sentences, project_dir)
     else:
-        # load the image file using moviepy
-        image_clip = ImageClip(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").set_duration(audio_duration)
+        num_frags = len(list(frag_dir.glob("story_fragment*.txt")))
+
+    # Generate prompts
+    _unload_sd()
+    _reload_ollama()
+    prompt_dir = project_dir / "text/image_prompts"
+    for idx in range(num_frags):
+        prompt_file = prompt_dir / f"image_prompt{idx}.txt"
+        if not prompt_file.exists():
+            prompt = build_image_prompt(_read_text(frag_dir / f"story_fragment{idx}.txt"))
+            _write_text(prompt_file, prompt)
+            _log(f"Done: image_prompt{idx}")
+
+    # Generate audio
+    for idx in range(num_frags):
+        wav = project_dir / f"audio/voiceover{idx}.wav"
+        mp3 = project_dir / f"audio/voiceover{idx}.mp3"
+        if not (wav.exists() or mp3.exists()):
+            frag = _read_text(frag_dir / f"story_fragment{idx}.txt")
+            if TTS_PROVIDER == "elevenlabs":
+                tts_elevenlabs(frag, mp3)
+            elif TTS_PROVIDER == "kokoro":
+                tts_kokoro(frag, wav)
+            else:
+                asyncio.run(tts_edge(frag, wav))
+            _log(f"Done: voiceover{idx}")
+
+
+    # Generate images
+    _unload_ollama()
+    _reload_sd()
+    for idx in range(num_frags):
+        img = project_dir / f"images/image{idx}.jpg"
+        if not img.exists():
+            generate_image(idx, project_dir)
+
+    # Generate clips (multi-process for speed)
+    MAX_CORES = min(multiprocessing.cpu_count(), 8)          # cap at 8 
     
-    # use moviepy to create a text clip from the text
-    screensize = (image_width, image_height)
-    text_clip = TextClip(story_fragment, fontsize=int(0.0599*image_height), font="Impact", color="black", stroke_color="white", stroke_width=round(0.0026*image_height, 1), size=screensize, method='caption', align="South")
-    text_clip = text_clip.set_duration(audio_duration)
-    
-    # concatenate the audio, image, and text clips
-    if(Path(f"{CURRENT_PROJECT_DIR}/images/movie_mirror{i}.mp4").is_file() == True):
-        clip = movie_clip.set_audio(audio_clip)
+    def _ready(idx: int) -> bool:
+        return (project_dir / f"videos/video{idx}.mp4").exists()
+
+    tasks = [idx for idx in range(num_frags) if not _ready(idx)]
+    if not tasks:
+        _log("All clips already exist – skipping.")
     else:
-        clip = image_clip.set_audio(audio_clip)
-    video = CompositeVideoClip([clip, text_clip])
-    
-    # save Video Clip to a file
-    video_mp4 = video.write_videofile(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4", fps=FPS, codec="libx264")
-    print(f"{showTime()} The Video{i} Has Been Created Successfully!")
-        
-    
-def askChatGPT(text, model_engine):
-    do_it = True
-    answer = ''
-    while(do_it):
-        try: 
-            completions = openai.Completion.create(
-                engine=model_engine,
-                prompt=text,
-                max_tokens=100,
-                n=1,
-                stop=None,
-                temperature=0.9,
-                request_timeout=10.0, # test
-            )
-            do_it = False
-            answer = completions.choices[0].text
-        except Exception as e:
-            wait_time = 10
-            print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
-            time.sleep(wait_time)
-    
-    return answer  
-    
- 
- 
-def createListOfClips(CURRENT_PROJECT_DIR):
-    
-    clips = []
-    l_files = os.listdir(CURRENT_PROJECT_DIR+"/videos")
-    l_files.sort(key=lambda f: int(re.sub('\D', '', f)))
-    
-    #no_digit_files = [f for f in l_files if not re.search('\d', f)]
-    #l_files.sort(key=lambda f: int(re.sub('\D', '', f)) if re.search('\d', f) else float('inf'))
-    #print("Files without digits:")
-    #for file in no_digit_files:
-    #    print(file)
-    
-    for file in l_files:
-        clip = VideoFileClip(f"{CURRENT_PROJECT_DIR}/videos/{file}")
-        clips.append(clip)
-    
-    return clips
+        _log(f"Building {len(tasks)} clips using ≤ {MAX_CORES} processes …")
 
+        with ProcessPoolExecutor(max_workers=MAX_CORES) as pool:
+            for idx in tasks:
+                pool.submit(create_video_clip, idx, project_dir)
+                time.sleep(1)
 
-    
+    # Final render
+    final_video = project_dir / f"{project_dir.name}.mp4"
+    if not final_video.exists():
+        make_final_video(project_dir.name, project_dir)
 
-def makeFinalVideo(project_name, CURRENT_PROJECT_DIR):
-
-    # create sorted list of clips
-    print(f"{showTime()} Fixing order of video clips")
-    clips = createListOfClips(CURRENT_PROJECT_DIR)
-    
-    # add audio fade to prevent audio glitches when combining multiple clips
-    print(f"{showTime()} Adding audio fadein / fadeout...")
-    clips = [clip.audio_fadein(0.10).audio_fadeout(0.10) for clip in clips]
-    
-    # add video fade to create smooth transitions
-    print(f"{showTime()} Adding video fadein / faedout...")
-    clips = [clip.crossfadein(1.0).crossfadeout(1.0) for clip in clips]
-    
-    # combine all clips into final video
-    print(f"{showTime()} Concatenate all clips into final video...")
-    final_video = concatenate_videoclips(clips, padding=-1, method="compose")
-    
-    # add backgroud music to video
-    if BG_MUSIC == "yes":
-        print(f"{showTime()} Adding music to file...")
-        original_audio = final_video.audio
-        soundtrack = AudioFileClip(str(BG_MUSIC_PATH))
-        bg_music = soundtrack.audio_loop(duration=final_video.duration)
-        bg_music = bg_music.volumex(MUSIC_VOLUME)
-        final_audio = CompositeAudioClip([original_audio, bg_music])
-        final_video = final_video.set_audio(final_audio)
-    
-    print(f"{showTime()} Writing final video to file...")
-    final_video.write_videofile(CURRENT_PROJECT_DIR+'/'+project_name+".mp4", fps=FPS, codec="libx264")
-        
-    print(f"{showTime()} Final video created successfully!")
-
-    
-    
 
 if __name__ == "__main__":
-    
-    print(f"{showTime()}")
-    # Get current working directory
-    CWD = os.getcwd()
-    # set name for main directory for projects
-    PROJECTS_DIR = 'projects'
-    # list each project in PROJECTS_DIR
-    project_names_mixed = [ f.name for f in os.scandir(PROJECTS_DIR) if f.is_dir() ]
-    
-    # sort project directiories by name
-    project_names = []
-    try:
-        project_names_mixed.sort(key=lambda f: int(re.sub(r'\D', '', f)))
-    except:
-        pass
-    for project_name_mixed in project_names_mixed:
-        project_names.append(project_name_mixed)
-       
-    # run each project in PROJECTS_DIR in sequence
-    for project_name in project_names:
-        processes_list = []
-        CURRENT_PROJECT_DIR = CWD+'/'+PROJECTS_DIR+'/'+project_name
-        os.chdir(CURRENT_PROJECT_DIR)
-        print("Current working directory: {0}".format(os.getcwd())) 
-        
-        if(Path(f"{CURRENT_PROJECT_DIR}/{project_name}.mp4").is_file() == False):
-            if DEBUG == 'yes':
-                pause()
-                
-            # Create directiories for text, audio, images and video files    
-            createFolders()
-            
-            if len(os.listdir(f"{CURRENT_PROJECT_DIR}/text/story_fragments")) == 0:
-                # load story and split it by sentence
-                number_of_story_sentences = load_and_split_to_sentences("story.txt")
-                
-                # group sentences into story fragments of a given length
-                number_of_story_fragments = sentences_to_fragments(number_of_story_sentences, FRAGMENT_LENGTH)
-                
-            else:
-                number_of_story_fragments = len(os.listdir(f"{CURRENT_PROJECT_DIR}/text/story_fragments"))
-            
-            if SPLIT_TEXT_ONLY == "yes":
-                continue
-            
-            image_prompts = []
-            
-            using_video_fragments_Processes = False
-  
-  
-            # vvv ollama pre-generate 
-            if USE_CHATGPT == 'ollama':
-                response = requests.post(url=f"{SD_URL}/sdapi/v1/unload-checkpoint", json={})
-                print(response.text)
-                time.sleep(1)
-                for o in range(number_of_story_fragments):
-                    if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{o}.txt").is_file() == False):
-                        # translate fragment into prompt
-                        fragment_toPrompt(o, CURRENT_PROJECT_DIR, image_width, image_height, True if isinstance(SPEED_UP, str) and SPEED_UP == "yes" else False)
-                        
-                # unload ollama model        
-                url = 'http://localhost:11434/api/generate'
-                data = {'model': OLLAMA_MODEL, 'keep_alive': 0}
-                response = requests.post(url, json=data)
-                print(response.text)
-                time.sleep(1)
-                response = requests.post(url=f"{SD_URL}/sdapi/v1/reload-checkpoint", json={})
-                print(response.text)
-                time.sleep(1)
-            # ^^^ ollama pre-generate 
-                
-                
-            # for each story fragment
-            for i in range(number_of_story_fragments):
-                print(f"{showTime()} {i} of {number_of_story_fragments-1}:")
-                
-                # vvvvvv pause / unpause
-                # if cpu usage is more than 95%, wait (tweak this value based on your needs) 
-                cpu_usage = int(psutil.cpu_percent(interval=0.1, percpu=False))
-                while (cpu_usage > 90):
-                    print(f"{showTime()} Main: High CPU usage! {cpu_usage}% -> Waiting...")
-                    time.sleep(2)
-                    cpu_usage = int(psutil.cpu_percent(interval=2.0, percpu=False))
-                # ^^^^^^ pause / unpause
-                
-                #vvv
-                # if free virtual memory is less than this amount of GB, then wait (tweak this value based on your needs)
-                free_swap = int(psutil.swap_memory()[2]/1000000000)
-                while (free_swap < FREE_SWAP):
-                    print(f"{showTime()} Main: High vmem usage! Free swap: {free_swap} -> Waiting...")
-                    time.sleep(300)
-                    free_swap = int(psutil.swap_memory()[2]/1000000000)
-                #^^^
-
-                # create voiceover 
-                if(Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.wav").is_file() == False) and (Path(f"{CURRENT_PROJECT_DIR}/audio/voiceover{i}.mp3").is_file() == False):
-                    story_fragment = read_file(f"text/story_fragments/story_fragment{i}.txt")
-                    do_it = True
-                    while(do_it):
-                        try: 
-                            if USE_ELEVENLABS == 'elevenlabs':
-                                create_elevenlabs_vioceover(story_fragment, CURRENT_PROJECT_DIR)
-                                print(f"{showTime()} Created voiceover using Elevenlabs...")
-                            elif USE_ELEVENLABS == 'kokoro':
-                                create_kokoro_voiceover(i, story_fragment, CURRENT_PROJECT_DIR)
-                                print(f"{showTime()} Created voiceover using Kokoro...")
-                            else:
-                                asyncio.get_event_loop().run_until_complete(create_vioceover(story_fragment, CURRENT_PROJECT_DIR))
-                                print(f"{showTime()} Created voiceover using Edge-tts...")
-                            do_it = False
-                        except Exception as e:
-                            wait_time = 10
-                            print(f"Exception!!! \n{e} \nWaiting for {wait_time} seconds and trying again...")
-                            time.sleep(wait_time)
-                    
-                if(Path(f"{CURRENT_PROJECT_DIR}/text/image_prompts/image_prompt{i}.txt").is_file() == False):
-                    # translate fragment into prompt
-                    fragment_toPrompt(i, CURRENT_PROJECT_DIR, image_width, image_height, False)
-                
-                        
-                if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == True) and (Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
-                    # do not start all image to video conversions at once
-                    time.sleep(2)
-                
-                if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
-                    # generate image form prompt
-                    prompt_to_image(i, image_width, image_height, CURRENT_PROJECT_DIR)
-                    
-                if(Path(f"{CURRENT_PROJECT_DIR}/videos/video{i}.mp4").is_file() == False):
-                    # create video clip using story fragment and generated image
-                    # create a new process
-                    using_video_fragments_Processes = True
-                    process = Process(target = createVideoClip, args = (i, CURRENT_PROJECT_DIR))
-                    # start the new process
-                    process.start()
-                    processes_list.append(process)
- 
-            if(using_video_fragments_Processes):
-                # wait for the new process to finish
-                print(f"{showTime()} Main: Waiting for video_fragments process to terminate...")
-                # block until all tasks are done
-                for process in processes_list:
-                    process.join() # call to ensure subsequent line (e.g. restart_program) 
-                    # is not called until all processes finish
-                time.sleep(10)
-                # continue on
-                print(f"{showTime()} Main: video_fragments joined, continuing on")
-
-            
-            if(Path(CURRENT_PROJECT_DIR+'/'+project_name+".mp4").is_file() == False):
-                # create final video
-                final_video_process = Process(target = makeFinalVideo, args = (project_name, CURRENT_PROJECT_DIR))
-                final_video_process.start()
-                time_to_wait = int(((i/10)+1)*FPS)
-                print(f"{showTime()} Waiting {time_to_wait} second before starting next project")
-                time.sleep(time_to_wait)
-
-                # block until all tasks are done    
-                #final_video_process.join()
-                #print('Main: final_video_process joined, continuing on')
-                #pause()
-
-        
-   
-   
-'''
-# voices for edge-tts:
-
-Name: en-AU-NatashaNeural
-Gender: Female
-
-Name: en-AU-WilliamNeural
-Gender: Male
-
-Name: en-CA-ClaraNeural
-Gender: Female
-
-Name: en-CA-LiamNeural
-Gender: Male
-
-Name: en-GB-LibbyNeural
-Gender: Female
-
-Name: en-GB-MaisieNeural
-Gender: Female
-
-Name: en-GB-RyanNeural
-Gender: Male
-
-Name: en-GB-SoniaNeural
-Gender: Female
-
-Name: en-GB-ThomasNeural
-Gender: Male
-
-Name: en-HK-SamNeural
-Gender: Male
-
-Name: en-HK-YanNeural
-Gender: Female
-
-Name: en-IE-ConnorNeural
-Gender: Male
-
-Name: en-IE-EmilyNeural
-Gender: Female
-
-Name: en-IN-NeerjaExpressiveNeural
-Gender: Female
-
-Name: en-IN-NeerjaNeural
-Gender: Female
-
-Name: en-IN-PrabhatNeural
-Gender: Male
-
-Name: en-KE-AsiliaNeural
-Gender: Female
-
-Name: en-KE-ChilembaNeural
-Gender: Male
-
-Name: en-NG-AbeoNeural
-Gender: Male
-
-Name: en-NG-EzinneNeural
-Gender: Female
-
-Name: en-NZ-MitchellNeural
-Gender: Male
-
-Name: en-NZ-MollyNeural
-Gender: Female
-
-Name: en-PH-JamesNeural
-Gender: Male
-
-Name: en-PH-RosaNeural
-Gender: Female
-
-Name: en-SG-LunaNeural
-Gender: Female
-
-Name: en-SG-WayneNeural
-Gender: Male
-
-Name: en-TZ-ElimuNeural
-Gender: Male
-
-Name: en-TZ-ImaniNeural
-Gender: Female
-
-Name: en-US-AnaNeural
-Gender: Female
-
-Name: en-US-AriaNeural
-Gender: Female
-
-Name: en-US-ChristopherNeural
-Gender: Male
-
-Name: en-US-EricNeural
-Gender: Male
-
-Name: en-US-GuyNeural
-Gender: Male
-
-Name: en-US-JennyNeural
-Gender: Female
-
-Name: en-US-MichelleNeural
-Gender: Female
-
-Name: en-US-RogerNeural
-Gender: Male
-
-# good one
-Name: en-US-SteffanNeural
-Gender: Male
-
-Name: en-ZA-LeahNeural
-Gender: Female
-
-Name: en-ZA-LukeNeural
-Gender: Male
-'''
+    base = pathlib.Path.cwd() / "projects"
+    if not base.exists():
+        base.mkdir()
+    for proj in sorted(base.iterdir()):
+        if proj.is_dir():
+            _log(f"=== Running project {proj.name} ===")
+            run_project(proj)
