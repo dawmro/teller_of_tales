@@ -191,7 +191,7 @@ SD_URL=http://localhost:7860 # Local API URL
 ## Setup:
 1. Create new virtual env:
 ``` sh
-python -m venv env
+py -3.8 -m venv env
 ```
 2. Activate your virtual env:
 ``` sh
