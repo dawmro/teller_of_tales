@@ -409,8 +409,7 @@ def generate_image(idx: int, project_dir: pathlib.Path) -> None:
                 if response.status_code == 200:
                     image = io.BytesIO(response.content)
                     img = Image.open(image)
-                    if(Path(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg").is_file() == False):
-                        img.save(f"{CURRENT_PROJECT_DIR}/images/image{i}.jpg")
+                    img.save(image_path)
                 else:
                     raise requests.exceptions.HTTPError(f'Failed to download the image. Status code: {response.status_code}')    
                 
@@ -419,13 +418,9 @@ def generate_image(idx: int, project_dir: pathlib.Path) -> None:
                 
             do_it = False
             
-        except Exception as e:
-            if try_once:
-                do_it = False
-                _log(f"Exception!!! {idx} \n{e} \nNot trying again.")
-            else:    
-                _log(f"Exception!!! {idx} \n{e} \nWaiting for {wait_time} seconds and trying again...")
-                time.sleep(wait_time)
+        except Exception as e:   
+            _log(f"Exception!!! {idx} \n{e} \nWaiting for {wait_time} seconds and trying again...")
+            time.sleep(wait_time)
 
 
 
