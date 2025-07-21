@@ -355,7 +355,7 @@ def _reload_sd() -> None:
 def _sd_api_payload(prompt: str) -> dict:
     """Return A1111 API payload for txt2img."""
     return {
-        "prompt": f"{POSITIVE_PREFIX} {prompt} {POSITIVE_SUFFIX}",
+        "prompt": f"{prompt}",
         "negative_prompt": NEGATIVE_PROMPT,
         "steps": 20,
         "width": IMAGE_WIDTH,
@@ -374,6 +374,7 @@ def generate_image(idx: int, project_dir: pathlib.Path) -> None:
         return
 
     prompt = _read_text(prompt_path)
+    prompt = f"{POSITIVE_PREFIX} {prompt} {POSITIVE_SUFFIX}"
     
     _log(f"{idx} Loaded Prompt: {prompt}")
     do_it = True
