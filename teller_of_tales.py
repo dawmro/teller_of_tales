@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import configparser
+import gc
 import io
 import json
 import multiprocessing
