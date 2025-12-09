@@ -277,7 +277,7 @@ projects/
     └── story.txt
 ```
 
-Each `story.txt` file can be 500-5000 words (longer texts take proportionally longer to process).
+Each `story.txt` file can be as long an you want (longer texts take proportionally longer to process).
 
 #### 2. Run the Pipeline
 
