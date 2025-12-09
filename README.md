@@ -1,6 +1,24 @@
-# teller_of_tales
+[![ChatGPT](https://img.shields.io/badge/ChatGPT-OpenAI-412991?logo=openai&logoColor=white)](https://openai.com/)
+[![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-FF6B35?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MCIgeT0iNjAiIGZvbnQtc2l6ZT0iODAiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TzwvdGV4dD48L3N2Zz4=)](https://ollama.ai/)
+[![KeyBERT](https://img.shields.io/badge/KeyBERT-NLP-3776AB?logo=python&logoColor=white)](https://github.com/MaartenGr/KeyBERT)
+[![NLTK](https://img.shields.io/badge/NLTK-Text%20Processing-2C3E50?logo=python&logoColor=white)](https://www.nltk.org/)
+[![Python 3.10](https://img.shields.io/badge/Python-3.8-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Edge-TTS](https://img.shields.io/badge/Edge%20TTS-Microsoft-0078D4?logo=microsoft&logoColor=white)](https://github.com/rany2/edge-tts)
+[![ElevenLabs](https://img.shields.io/badge/ElevenLabs-Voice%20AI-00D9FF?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB4PSI1MCIgeT0iNjAiIGZvbnQtc2l6ZT0iOTAiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+🔊</L3RleHQ+PC9zdmc+)](https://elevenlabs.io/)
+[![MoviePy](https://img.shields.io/badge/MoviePy-Video%20Editing-E34C26?logo=movie&logoColor=white)](https://zulko.github.io/moviepy/)
+[![StableDiffusion](https://img.shields.io/badge/Stable%20Diffusion-Image%20Gen-512BD4?logo=pytorch&logoColor=white)](https://stablediffusion.ai/)
 
-Teller of Tales is a project that creates narrated video stories from book chapters using natural language processing (NLP), OpenAI, Ollama and StableDiffusion. It can run multiple projects at once and generate videos automatically and unsupervised. The results may vary depending on the input text and the chosen options.
+
+# Teller of Tales
+
+Transform your favorite book chapters into stunning narrated video stories with AI-powered automation.
+
+## Overview
+
+**Teller of Tales** is an intelligent automation system that converts written book chapters into professional-quality narrated videos. By leveraging natural language processing, advanced language models, and AI image generation, the project creates compelling visual narratives with synchronized voiceovers, background music, and text overlays—all in a fully automated, scalable pipeline.
+
+This tool enables content creators, educational platforms, and storytellers to generate engaging video content at scale, reducing production time from hours to minutes while maintaining high quality output.
+
 
 ## Features:
 * NLP with OpenAI, Ollama or KeyBERT
@@ -167,6 +185,21 @@ graph LR
 
 This architecture balances parallelism while preventing system overload, leveraging modern APIs and affordable cloud services where needed.
 
+## 🔧 Configuration Guide
+
+### Key Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `FRAGMENT_LENGTH` | Int | 150 | Words per text fragment (lower = shorter clips, higher = longer) |
+| `FREE_SWAP` | Int | 200 | Minimum GB free space before processing |
+| `DEBUG` | Bool | no | Verbose logging and debug info |
+| `USE_CHATGPT` | Bool | yes | Enable ChatGPT-based prompt generation |
+| `USE_ELEVENLABS` | Bool | no | Enable premium ElevenLabs TTS |
+| `SD_URL` | URL | localhost:7860 | StableDiffusion API endpoint |
+| `OLLAMA_MODEL` | String | llama2:7b | Ollama model specification |
+| `STYLE_DESCRIPTION` | String | empty | Global art style to apply to all images |
+
 ### Key Configuration Points
 ```
 # config.ini snippet
@@ -228,12 +261,55 @@ huggingface-cli login
 
 
 
-## Usage:
-1. Create a folder in the ‘projects’ directory. The folder name will become the final video name.
-2. Paste your story into the story.txt file inside the created folder.
-3. Create multiple folders and paste multiple stories if you want to run multiple projects at once.
-4. Run the python script:
-``` sh
-python .\teller_of_tales.py
+## 📖 Usage
+
+### Basic Workflow
+
+#### 1. Prepare Your Content
+
 ```
-5. Wait for the script to finish and check the folder with project for the output video.
+projects/
+├── my_first_story/
+│   └── story.txt          (Your book chapter goes here)
+├── another_story/
+│   └── story.txt
+└── third_story/
+    └── story.txt
+```
+
+Each `story.txt` file can be 500-5000 words (longer texts take proportionally longer to process).
+
+#### 2. Run the Pipeline
+
+```bash
+python teller_of_tales.py
+```
+
+The script automatically discovers all projects in the `projects/` directory and processes them sequentially or in parallel based on your configuration.
+
+#### 3. Retrieve Output
+
+Each project folder contains the complete processing pipeline output:
+
+```
+projects/my_first_story/
+├── story.txt                    # Original input
+├── audio/
+│   ├── voiceover0.mp3
+│   ├── voiceover1.mp3
+│   └── ...
+├── images/
+│   ├── image0.jpg
+│   ├── image1.jpg
+│   └── ...
+├── text/
+│   └── image-prompts/
+│       ├── image_prompt0.txt
+│       ├── image_prompt1.txt
+│       └── ...
+├── videos/
+│   ├── video0.mp4
+│   ├── video1.mp4
+│   └── ...
+└── final.mp4                    # 🎬 Your completed video!
+```
